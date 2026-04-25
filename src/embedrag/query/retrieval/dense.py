@@ -89,7 +89,7 @@ class DenseRetriever:
         """
         t0 = time.monotonic()
         raw_results = self._shard_manager.search(query_vector, top_k * 2)
-        if deleted_ids:
+        if deleted_ids is not None:
             raw_results = [r for r in raw_results if r.chunk_id not in deleted_ids]
         elapsed = (time.monotonic() - t0) * 1000
         return raw_results[:top_k], elapsed

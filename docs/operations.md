@@ -27,6 +27,11 @@ curl -X POST http://writer:8001/ingest -H 'Content-Type: application/json' \
 # 3. Build index + snapshot
 curl -X POST http://writer:8001/build
 
+# 3b. Force full rebuild (skip delta detection)
+curl -X POST http://writer:8001/build \
+  -H 'Content-Type: application/json' \
+  -d '{"force_full_rebuild": true}'
+
 # 4. Publish to object store
 curl -X POST http://writer:8001/publish
 
@@ -40,9 +45,13 @@ embedrag query --config config/query_node.yaml
 # Ingest new/updated documents
 curl -X POST http://writer:8001/ingest -d '{"documents": [...]}'
 
-# Rebuild (delta-aware: only changed shards are re-uploaded)
+# Rebuild (delta-aware: only changed files are re-uploaded)
+# Uses SHA256 comparison with previous manifest to minimize upload size
 curl -X POST http://writer:8001/build
 curl -X POST http://writer:8001/publish
+
+# Force rebuild skipping delta (e.g., to compact fragmented indexes)
+curl -X POST http://writer:8001/build -d '{"force_full_rebuild": true}'
 
 # Query nodes auto-detect the new version within poll_interval_seconds
 # Or trigger manually:
@@ -126,14 +135,34 @@ The syncer keeps the last 2 generations in `active/` and cleans up older ones.
 
 ## Monitoring
 
-Prometheus metrics are exposed on the metrics port (default 9090). Key metrics:
+Prometheus metrics are exposed at `/metrics` on each node's main port:
 
+**Query node (port 8000):**
 - `embedrag_search_latency_seconds` - Search request latency histogram
-- `embedrag_search_total` - Total search requests counter
-- `embedrag_active_generation` - Currently loaded snapshot version
-- `embedrag_hotfix_buffer_size` - Current hotfix buffer entry count
-- `embedrag_sync_duration_seconds` - Snapshot sync duration
-- `embedrag_shard_load_seconds` - Per-shard FAISS load time
+- `embedrag_search_total{status}` - Total search requests counter
+- `embedrag_dense_search_seconds` - Dense retrieval latency histogram
+- `embedrag_sparse_search_seconds` - Sparse (BM25) retrieval latency histogram
+- `embedrag_hotfix_buffer_vectors` - Current hotfix buffer entry count
+
+**Writer node (port 8001):**
+- `embedrag_ingest_docs_total` - Total documents ingested
+- `embedrag_build_duration_seconds` - Snapshot build duration histogram
+- `embedrag_publish_duration_seconds` - Snapshot upload duration histogram
+
+Example Prometheus config:
+```yaml
+scrape_configs:
+  - job_name: 'embedrag-query'
+    static_configs:
+      - targets: ['localhost:8000']
+        labels:
+          node_type: 'query'
+  - job_name: 'embedrag-writer'
+    static_configs:
+      - targets: ['localhost:8001']
+        labels:
+          node_type: 'writer'
+```
 
 ## Troubleshooting
 

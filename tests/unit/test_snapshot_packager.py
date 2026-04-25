@@ -147,3 +147,39 @@ class TestSnapshotPackager:
         assert m2.snapshot_version == "v002"
         assert m2.previous_version == "v001"
         assert m2.total_compressed_size > 0
+        assert m2.delta is not None
+        assert m2.delta.from_version == "v001"
+        assert len(m2.delta.unchanged_files) > 0 or len(m2.delta.changed_files) > 0
+
+    def test_force_full_rebuild_skips_delta(self, tmp_path):
+        """When force_full_rebuild=True, delta should not be computed."""
+        build_dir, space_index_infos, space_id_map_paths, db_path = _create_test_files(tmp_path)
+
+        out1 = str(tmp_path / "snap_v001")
+        packager = SnapshotPackager()
+        _ = packager.package(
+            build_dir=build_dir,
+            output_dir=out1,
+            space_index_infos=space_index_infos,
+            space_id_map_paths=space_id_map_paths,
+            db_path=db_path,
+            doc_count=10,
+            chunk_count=100,
+            version="v001",
+        )
+
+        out2 = str(tmp_path / "snap_v002")
+        m2 = packager.package(
+            build_dir=build_dir,
+            output_dir=out2,
+            space_index_infos=space_index_infos,
+            space_id_map_paths=space_id_map_paths,
+            db_path=db_path,
+            doc_count=10,
+            chunk_count=100,
+            version="v002",
+            previous_manifest=None,  # Force full rebuild
+        )
+
+        assert m2.delta is None
+        assert m2.previous_version == ""

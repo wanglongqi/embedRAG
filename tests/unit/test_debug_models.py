@@ -20,6 +20,7 @@ class TestDebugSearchRequest:
         assert req.filters is None
         assert req.expand_context is True
         assert req.context_depth == 1
+        assert req.space == "text"
 
     def test_custom_fields(self):
         req = DebugSearchRequest(
@@ -29,12 +30,14 @@ class TestDebugSearchRequest:
             filters={"doc_type": "article"},
             expand_context=False,
             context_depth=2,
+            space="image",
         )
         assert req.query_text == "机器学习"
         assert req.top_k == 20
         assert req.mode == "sparse"
         assert req.filters == {"doc_type": "article"}
         assert req.expand_context is False
+        assert req.space == "image"
 
 
 class TestDebugHitModels:

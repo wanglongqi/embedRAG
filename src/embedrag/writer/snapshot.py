@@ -40,7 +40,8 @@ class SnapshotPackager:
     ) -> Manifest:
         """Create a complete snapshot with compressed files and manifest.
 
-        Supports multiple named embedding spaces.
+        Supports multiple named embedding spaces. When previous_manifest is provided,
+        computes delta info by comparing file hashes.
         """
         t0 = time.monotonic()
         out = Path(output_dir)
@@ -51,6 +52,7 @@ class SnapshotPackager:
         all_id_maps: dict[str, FileEntry] = {}
         total_raw = 0
         total_compressed = 0
+        all_files: dict[str, str] = {}  # path -> sha256
 
         for space, index_info in space_index_infos.items():
             (out / "index" / space).mkdir(parents=True, exist_ok=True)
@@ -63,11 +65,13 @@ class SnapshotPackager:
                 compressed_path.parent.mkdir(parents=True, exist_ok=True)
 
                 compressed_size = compress_file(raw_path, compressed_path, self._compression_level)
+                file_hash = compute_sha256(raw_path)
+                all_files[shard.file] = file_hash
                 shard_entries.append(
                     ShardEntry(
                         file=shard.file,
                         compressed_file=compressed_file,
-                        sha256_raw=compute_sha256(raw_path),
+                        sha256_raw=file_hash,
                         sha256_compressed=compute_sha256(compressed_path),
                         raw_size=raw_path.stat().st_size,
                         compressed_size=compressed_size,
@@ -91,10 +95,12 @@ class SnapshotPackager:
             id_map_file = f"index/{space}/id_map.msgpack"
             id_map_compressed_file = f"index/{space}/id_map.msgpack.zst"
             id_map_compressed_size = compress_file(id_map_raw, out / id_map_compressed_file, self._compression_level)
+            file_hash = compute_sha256(id_map_raw)
+            all_files[id_map_file] = file_hash
             all_id_maps[space] = FileEntry(
                 file=id_map_file,
                 compressed_file=id_map_compressed_file,
-                sha256_raw=compute_sha256(id_map_raw),
+                sha256_raw=file_hash,
                 sha256_compressed=compute_sha256(out / id_map_compressed_file),
                 raw_size=Path(id_map_raw).stat().st_size,
                 compressed_size=id_map_compressed_size,
@@ -104,10 +110,12 @@ class SnapshotPackager:
 
         db_compressed_file = "db/embedrag.db.zst"
         db_compressed_size = compress_file(db_path, out / db_compressed_file, self._compression_level)
+        file_hash = compute_sha256(db_path)
+        all_files["db/embedrag.db"] = file_hash
         db_entry = FileEntry(
             file="db/embedrag.db",
             compressed_file=db_compressed_file,
-            sha256_raw=compute_sha256(db_path),
+            sha256_raw=file_hash,
             sha256_compressed=compute_sha256(out / db_compressed_file),
             raw_size=Path(db_path).stat().st_size,
             compressed_size=db_compressed_size,
@@ -116,6 +124,29 @@ class SnapshotPackager:
         )
         total_raw += db_entry.raw_size
         total_compressed += db_entry.compressed_size
+
+        delta_info = None
+        if previous_manifest:
+            unchanged, changed = [], []
+            for path, hash_val in all_files.items():
+                prev_hash = getattr(
+                    previous_manifest.get_file_entry_by_compressed(path),
+                    "sha256_raw",
+                    "",
+                )
+                if prev_hash == hash_val:
+                    unchanged.append(path)
+                else:
+                    changed.append(path)
+            if changed or unchanged:
+                from embedrag.models.manifest import DeltaInfo
+
+                delta_info = DeltaInfo(
+                    from_version=previous_manifest.snapshot_version,
+                    unchanged_files=unchanged,
+                    changed_files=changed,
+                )
+                logger.info("delta_computed", unchanged=len(unchanged), changed=len(changed))
 
         manifest = Manifest(
             manifest_version=3,
@@ -128,6 +159,7 @@ class SnapshotPackager:
             id_maps=all_id_maps,
             total_raw_size=total_raw,
             total_compressed_size=total_compressed,
+            delta=delta_info,
         )
 
         manifest.save(out / "manifest.json")
@@ -142,8 +174,6 @@ class SnapshotPackager:
             elapsed_s=round(elapsed, 1),
         )
         return manifest
-
-    # TODO: Re-implement multi-space delta detection in a future iteration.
 
 
 class SnapshotPublisher:

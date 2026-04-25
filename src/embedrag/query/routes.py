@@ -37,6 +37,13 @@ from embedrag.query.retrieval.dense import DenseResult, DenseRetriever
 from embedrag.query.retrieval.fusion import rrf_fuse
 from embedrag.query.retrieval.hierarchy_expand import HierarchyExpander
 from embedrag.query.retrieval.sparse import SparseResult, SparseRetriever
+from embedrag.shared.metrics import (
+    DENSE_LATENCY,
+    HOTFIX_BUFFER_SIZE,
+    SEARCH_COUNT,
+    SEARCH_LATENCY,
+    SPARSE_LATENCY,
+)
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -188,6 +195,10 @@ async def search(request: Request, body: SearchRequest) -> SearchResponse:
     )
 
     total_ms = (time.monotonic() - t_total) * 1000
+    SEARCH_LATENCY.observe(total_ms / 1000)
+    DENSE_LATENCY.observe(dense_ms / 1000)
+    SPARSE_LATENCY.observe(sparse_ms / 1000)
+    SEARCH_COUNT.labels(status="success").inc()
     return SearchResponse(
         chunks=chunks,
         total=len(chunks),
@@ -231,6 +242,10 @@ async def search_text(request: Request, body: TextSearchRequest) -> SearchRespon
     )
 
     total_ms = (time.monotonic() - t_total) * 1000
+    SEARCH_LATENCY.observe(total_ms / 1000)
+    DENSE_LATENCY.observe(dense_ms / 1000)
+    SPARSE_LATENCY.observe(sparse_ms / 1000)
+    SEARCH_COUNT.labels(status="success").inc()
     return SearchResponse(
         chunks=chunks,
         total=len(chunks),
@@ -518,7 +533,7 @@ async def chunk_neighbors(
 @router.post("/admin/hotfix/add")
 async def hotfix_add(request: Request, body: HotfixAddRequest) -> HotfixResponse:
     state = _get_state(request)
-    space = body.space if hasattr(body, "space") else "text"
+    space = body.space
     async with state.gen_manager.acquire() as ctx:
         vec = np.array(body.embedding, dtype=np.float32)
         data = HotfixChunkData(
@@ -529,6 +544,7 @@ async def hotfix_add(request: Request, body: HotfixAddRequest) -> HotfixResponse
         )
         hotfix = ctx.get_hotfix_buffer(space)
         hotfix.add(body.chunk_id, vec, data)
+        HOTFIX_BUFFER_SIZE.set(hotfix.size)
         logger.warn("hotfix_add", chunk_id=body.chunk_id, buffer_size=hotfix.size)
         return HotfixResponse(
             operation="add",
@@ -540,7 +556,7 @@ async def hotfix_add(request: Request, body: HotfixAddRequest) -> HotfixResponse
 @router.post("/admin/hotfix/delete")
 async def hotfix_delete(request: Request, body: HotfixDeleteRequest) -> HotfixResponse:
     state = _get_state(request)
-    space = body.space if hasattr(body, "space") else "text"
+    space = body.space
     async with state.gen_manager.acquire() as ctx:
         hotfix = ctx.get_hotfix_buffer(space)
         for cid in body.chunk_ids:

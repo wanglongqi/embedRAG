@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
 
 from embedrag.config import WriterNodeConfig, load_writer_config
 from embedrag.logging_setup import get_logger, setup_logging
@@ -69,8 +70,14 @@ async def writer_lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_writer_app(config_path: str | None = None) -> FastAPI:
-    app = FastAPI(title="EmbedRAG Writer", version="0.4.0", lifespan=writer_lifespan)
+    app = FastAPI(title="EmbedRAG Writer", version="0.5.1", lifespan=writer_lifespan)
     app.state.config_path = config_path
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> PlainTextResponse:
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+        return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     from embedrag.writer.routes import router
 

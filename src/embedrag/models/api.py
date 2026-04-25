@@ -182,10 +182,12 @@ class HotfixAddRequest(BaseModel):
     text: str
     embedding: list[float]
     metadata: dict = Field(default_factory=dict)
+    space: str = "text"
 
 
 class HotfixDeleteRequest(BaseModel):
     chunk_ids: list[str]
+    space: str = "text"
 
 
 class HotfixResponse(BaseModel):
@@ -272,6 +274,7 @@ class DebugSearchRequest(BaseModel):
     expand_context: bool = True
     context_depth: int = 1
     mode: str = "hybrid"
+    space: str = "text"
 
 
 class DebugDenseHit(BaseModel):

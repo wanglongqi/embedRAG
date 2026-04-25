@@ -29,6 +29,7 @@ from embedrag.models.api import (
 )
 from embedrag.models.chunk import ChunkNode, Document
 from embedrag.models.manifest import IndexInfo
+from embedrag.shared.metrics import BUILD_DURATION, INGEST_COUNT, PUBLISH_DURATION
 from embedrag.shared.object_store import ObjectStoreClient
 from embedrag.writer.chunking.hierarchy import build_closure_entries
 from embedrag.writer.chunking.splitter import split_document
@@ -188,6 +189,7 @@ async def ingest(request: Request, body: IngestRequest) -> IngestResponse:
         chunks=len(all_chunks),
         spaces=list(space_chunks.keys()),
     )
+    INGEST_COUNT.inc(len(docs))
     return IngestResponse(
         ingested=len(docs),
         chunk_count=len(all_chunks),
@@ -216,6 +218,10 @@ async def build(request: Request, body: BuildRequest = BuildRequest()) -> BuildR
     spaces = await state.db.get_embedding_spaces()
     if not spaces:
         raise ValueError("No chunks with embeddings found")
+
+    previous_for_delta = None if body.force_full_rebuild else state.last_manifest
+    if body.force_full_rebuild and state.last_manifest:
+        logger.info("force_full_rebuild", previous=state.last_manifest.snapshot_version)
 
     space_index_infos: dict[str, IndexInfo] = {}
     space_id_map_paths: dict[str, str] = {}
@@ -253,7 +259,7 @@ async def build(request: Request, body: BuildRequest = BuildRequest()) -> BuildR
         doc_count=exported_doc_count,
         chunk_count=exported_chunk_count,
         version=version,
-        previous_manifest=state.last_manifest,
+        previous_manifest=previous_for_delta,
     )
 
     state.current_version = version
@@ -269,6 +275,7 @@ async def build(request: Request, body: BuildRequest = BuildRequest()) -> BuildR
         vectors=total_vectors,
         elapsed_s=round(elapsed, 1),
     )
+    BUILD_DURATION.observe(elapsed)
     return BuildResponse(
         version=version,
         doc_count=doc_count,
@@ -300,6 +307,7 @@ async def publish(request: Request) -> PublishResponse:
         size_mb=round(snapshot_size / 1024 / 1024, 1),
         elapsed_s=round(elapsed, 1),
     )
+    PUBLISH_DURATION.observe(elapsed)
     return PublishResponse(
         version=state.current_version,
         upload_time_seconds=round(elapsed, 2),
