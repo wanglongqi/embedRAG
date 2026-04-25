@@ -158,7 +158,7 @@ class WriterSQLitePool:
             )
             if emb_rows:
                 conn.executemany(
-                    "INSERT OR REPLACE INTO chunk_embeddings (chunk_id, space, embedding) " "VALUES (?, ?, ?)",
+                    "INSERT OR REPLACE INTO chunk_embeddings (chunk_id, space, embedding) VALUES (?, ?, ?)",
                     emb_rows,
                 )
             conn.commit()
@@ -230,7 +230,7 @@ class WriterSQLitePool:
     async def insert_closure_batch(self, relations: list[tuple[str, str, int]]) -> None:
         """Insert closure table entries: (ancestor_id, descendant_id, depth)."""
         async with self.write_conn() as conn:
-            sql = "INSERT OR IGNORE INTO chunk_closure (ancestor_id, descendant_id, depth) " "VALUES (?, ?, ?)"
+            sql = "INSERT OR IGNORE INTO chunk_closure (ancestor_id, descendant_id, depth) VALUES (?, ?, ?)"
             conn.executemany(sql, relations)
             conn.commit()
 
