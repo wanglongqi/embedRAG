@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 import numpy as np
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from embedrag.logging_setup import get_logger
 from embedrag.models.api import (
@@ -604,12 +604,20 @@ async def trigger_sync(request: Request, body: SyncTriggerRequest | None = None)
         if not quick_verify_snapshot(snapshot_dir, manifest):
             raise HTTPException(status_code=500, detail="Snapshot integrity check failed")
 
-        ctx = load_generation(
-            snapshot_dir,
-            manifest,
-            nprobe=state.config.index.nprobe,
-            use_mmap=state.config.index.mmap,
-        )
+        try:
+            ctx = load_generation(
+                snapshot_dir,
+                manifest,
+                nprobe=state.config.index.nprobe,
+                use_mmap=state.config.index.mmap,
+            )
+        except Exception as load_err:
+            logger.exception("sync_load_failed", version=manifest.snapshot_version)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Snapshot loads failed: {load_err}. Old version kept.",
+            )
+
         await state.gen_manager.swap(ctx)
         logger.info(
             "sync_local",
@@ -642,12 +650,21 @@ async def trigger_sync(request: Request, body: SyncTriggerRequest | None = None)
                 return {"status": "already_loaded", "source": source_url, "version": current}
             if not quick_verify_snapshot(snap_dir, manifest):
                 raise HTTPException(status_code=500, detail="Archive snapshot integrity check failed")
-            ctx = load_generation(
-                snap_dir,
-                manifest,
-                nprobe=state.config.index.nprobe,
-                use_mmap=state.config.index.mmap,
-            )
+
+            try:
+                ctx = load_generation(
+                    snap_dir,
+                    manifest,
+                    nprobe=state.config.index.nprobe,
+                    use_mmap=state.config.index.mmap,
+                )
+            except Exception as load_err:
+                logger.exception("sync_load_failed", version=manifest.snapshot_version)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Snapshot loads failed: {load_err}. Old version kept.",
+                )
+
             await state.gen_manager.swap(ctx)
             return {"status": "synced", "source": source_url, "version": manifest.snapshot_version}
 
@@ -762,16 +779,119 @@ async def reload_snapshot(request: Request, body: dict | None = None) -> dict:
     }
 
 
+@router.post("/admin/upload")
+async def upload_snapshot(request: Request, file: UploadFile = File(...)) -> dict:
+    """Upload a snapshot archive from browser.
+
+    Accepts a multipart/form-data file upload (.tar.zst, .tar.gz, .tgz, .tar).
+    The file is extracted and swapped in as the active generation.
+    """
+    import shutil
+    from pathlib import Path
+
+    from embedrag.models.manifest import Manifest
+    from embedrag.query.lifecycle.startup import load_generation, quick_verify_snapshot
+    from embedrag.shared.archive import extract_snapshot_archive
+
+    valid_exts = (".tar.zst", ".tar.zstd", ".tar.gz", ".tgz", ".tar")
+    filename = file.filename or ""
+    filename_lower = filename.lower()
+    ext = None
+    for ve in valid_exts:
+        if filename_lower.endswith(ve):
+            ext = ve
+            break
+    if ext is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported format. Use: {', '.join(valid_exts)}",
+        )
+
+    state = _get_state(request)
+    config = state.config
+
+    data_dir = config.node.data_dir
+    if not data_dir:
+        raise HTTPException(status_code=500, detail="data_dir not configured")
+
+    staging = Path(data_dir) / "uploads"
+    staging.mkdir(parents=True, exist_ok=True)
+
+    try:
+        upload_path = staging / filename
+        with open(upload_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+
+        logger.info("upload_received", filename=filename, size=upload_path.stat().st_size)
+
+        extract_dir = staging / f"extract_{upload_path.stem}"
+        if extract_dir.exists():
+            shutil.rmtree(extract_dir)
+        extract_dir.mkdir(parents=True, exist_ok=True)
+
+        snap_dir = extract_snapshot_archive(str(upload_path), str(extract_dir))
+
+        manifest_path = Path(snap_dir) / "manifest.json"
+        if not manifest_path.exists():
+            raise HTTPException(status_code=400, detail="Invalid archive: no manifest.json")
+
+        manifest = Manifest.load(manifest_path)
+        current = state.gen_manager.active_version
+
+        if not quick_verify_snapshot(snap_dir, manifest):
+            raise HTTPException(status_code=400, detail="Snapshot integrity check failed")
+
+        target = Path(config.node.data_dir) / "active" / manifest.snapshot_version
+        if target.exists():
+            shutil.rmtree(str(target))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        Path(snap_dir).rename(target)
+
+        try:
+            ctx = load_generation(
+                str(target),
+                manifest,
+                nprobe=config.index.nprobe,
+                use_mmap=config.index.mmap,
+            )
+        except Exception as load_err:
+            logger.exception("upload_load_failed", version=manifest.snapshot_version)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Snapshot loads failed: {load_err}. Old version kept.",
+            )
+
+        await state.gen_manager.swap(ctx)
+
+        shutil.rmtree(extract_dir, ignore_errors=True)
+        upload_path.unlink(missing_ok=True)
+
+        logger.info("upload_complete", version=manifest.snapshot_version)
+        return {
+            "status": "uploaded",
+            "version": manifest.snapshot_version,
+            "old_version": current,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("upload_failed")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {exc}")
+
+
 # ── Rerank proxy ──
 
 
 @router.post("/api/rerank")
 async def rerank_proxy(req: RerankRequest) -> RerankResponse:
-    """Proxy rerank requests to an external OpenAI-compatible embeddings API.
+    """Proxy rerank requests to an external rerank or embedding API.
 
-    Computes cosine similarity between the query embedding and each text
-    embedding, returning results sorted by descending score.  This avoids
-    browser CORS issues when the reranker runs on a different origin.
+    Supports two modes:
+    1. Native rerank: calls /v1/rerank endpoint (vLLM, llama-server)
+    2. Embedding proxy: computes cosine similarity via /v1/embeddings
+
+    Tries native rerank first, falls back to embeddings if unavailable.
     """
     import math
 
@@ -785,10 +905,27 @@ async def rerank_proxy(req: RerankRequest) -> RerankResponse:
         return RerankResponse(results=[], elapsed_ms=0)
 
     t0 = time.monotonic()
+    async with httpx.AsyncClient(timeout=120) as client:
+        rerank_url = url.rstrip("/") + "/v1/rerank"
+        try:
+            resp = await client.post(
+                rerank_url,
+                json={"model": model, "query": req.query, "documents": req.texts, "top_n": len(req.texts)},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                results = []
+                for item in data.get("results", []):
+                    results.append(RerankResult(index=item["index"], score=item.get("relevance_score", 0.0)))
+                results.sort(key=lambda r: -r.score)
+                elapsed = (time.monotonic() - t0) * 1000
+                return RerankResponse(results=results, elapsed_ms=elapsed)
+        except httpx.HTTPError:
+            pass
 
-    all_inputs = [req.query] + req.texts
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(url, json={"model": model, "input": all_inputs})
+        all_inputs = [req.query] + req.texts
+        embed_url = url.rstrip("/") + "/v1/embeddings"
+        resp = await client.post(embed_url, json={"model": model, "input": all_inputs})
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail=f"Reranker returned {resp.status_code}: {resp.text[:300]}")
 

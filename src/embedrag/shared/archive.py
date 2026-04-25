@@ -22,6 +22,8 @@ from embedrag.models.manifest import Manifest
 
 logger = get_logger(__name__)
 
+VALID_ARCHIVE_FORMATS = {".tar.zst", ".tar.zstd", ".tar.gz", ".tgz", ".tar"}
+
 ARCHIVE_EXTENSIONS = (".tar.zst", ".tar.zstd", ".tar.gz", ".tgz", ".tar")
 
 
@@ -106,11 +108,42 @@ def download_and_extract_archive(
     try:
         logger.info("archive_download_start", url=url)
         _download_file(url, tmp_path, timeout)
+        result = _extract_to(tmp_path, output)
         logger.info("archive_download_done", size=tmp_path.stat().st_size)
-
-        _extract(tmp_path, output, url)
+        return result
     finally:
         tmp_path.unlink(missing_ok=True)
+
+
+def extract_snapshot_archive(archive_path: str, output_dir: str) -> str:
+    """Extract a local archive into *output_dir*.
+
+    Returns the path to the snapshot directory (the folder containing
+    ``manifest.json``).
+    """
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    return _extract_to(Path(archive_path), output)
+
+
+def _extract_to(archive_path: Path, output: Path) -> str:
+    """Extract archive to output and return snapshot directory path."""
+    name_lower = archive_path.name.lower()
+    matched = None
+    for fmt in VALID_ARCHIVE_FORMATS:
+        if name_lower.endswith(fmt):
+            matched = fmt
+            break
+    if not matched:
+        raise ValueError(f"Unsupported archive format: {archive_path.name}")
+
+    _extract(archive_path, output, str(archive_path))
+
+    root = _find_snapshot_root(output)
+    if not root.exists():
+        raise ValueError("No manifest.json found after extraction")
+
+    return str(root)
 
     snap_dir = _find_snapshot_root(output)
     logger.info("archive_extracted", snapshot_dir=str(snap_dir))

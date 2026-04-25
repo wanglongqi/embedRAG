@@ -791,6 +791,75 @@
   $("#syncDirBtn").addEventListener("click", doSyncFromDir);
   $("#syncDirInput").addEventListener("keydown", (e) => { if (e.key === "Enter") doSyncFromDir(); });
 
+  // ── File upload handlers ──
+  const uploadDropZone = $("#uploadDropZone");
+  const uploadFileInput = $("#uploadFileInput");
+  const uploadFilename = $("#uploadFilename");
+  const uploadBtn = $("#uploadBtn");
+  const uploadStatus = $("#uploadStatus");
+
+  uploadDropZone.addEventListener("click", () => uploadFileInput.click());
+  uploadFileInput.addEventListener("change", () => {
+    const file = uploadFileInput.files[0];
+    if (file) {
+      uploadFilename.textContent = file.name;
+      uploadBtn.disabled = false;
+    }
+  });
+
+  uploadDropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    uploadDropZone.classList.add("drag-over");
+  });
+  uploadDropZone.addEventListener("dragleave", () => {
+    uploadDropZone.classList.remove("drag-over");
+  });
+  uploadDropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    uploadDropZone.classList.remove("drag-over");
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      uploadFileInput.files = e.dataTransfer.files;
+      uploadFilename.textContent = file.name;
+      uploadBtn.disabled = false;
+    }
+  });
+
+  uploadBtn.addEventListener("click", async () => {
+    const file = uploadFileInput.files[0];
+    if (!file) return;
+
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = '<span class="spinner"></span>';
+    uploadStatus.textContent = "";
+    uploadStatus.style.color = "";
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const resp = await fetch("/admin/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || "Upload failed");
+
+      uploadStatus.textContent = `Uploaded: ${data.version}`;
+      uploadStatus.style.color = "var(--success)";
+      uploadFilename.textContent = "";
+      uploadFileInput.value = "";
+      await refreshSyncStatus();
+      await refreshStatus();
+    } catch (err) {
+      uploadStatus.textContent = err.message;
+      uploadStatus.style.color = "var(--error)";
+    } finally {
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = "Upload";
+    }
+  });
+
   // ── Space selector population ──
   async function loadSpaces() {
     try {

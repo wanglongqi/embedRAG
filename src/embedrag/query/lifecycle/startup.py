@@ -136,6 +136,13 @@ def quick_verify_snapshot(snapshot_dir: str, manifest: Manifest) -> bool:
         logger.warn("quick_verify_fail", file=str(db_f))
         return False
 
+    for idm in manifest.id_maps.values():
+        idm_f = snap / (idm.compressed_file or idm.file)
+        expected_size = idm.compressed_size or idm.raw_size
+        if not quick_verify(idm_f, expected_size):
+            logger.warn("quick_verify_fail", file=str(idm_f))
+            return False
+
     return True
 
 

@@ -219,6 +219,17 @@
             <span class="sync-action-status" id="syncDirStatus"></span>
           </div>
         </details>
+        <details class="sync-source-panel">
+          <summary>Upload Snapshot File</summary>
+          <div class="upload-drop-zone" id="uploadDropZone">
+            <input type="file" id="uploadFileInput" accept=".tar.zst,.tar.gz,.tgz,.tar" style="display:none">
+            <p>Drag & drop a snapshot archive here, or click to select</p>
+            <p class="upload-hint">.tar.zst, .tar.gz, .tgz, .tar</p>
+            <div class="upload-filename" id="uploadFilename"></div>
+            <button class="btn-primary btn-sm-action" id="uploadBtn" disabled>Upload</button>
+            <span class="sync-action-status" id="uploadStatus"></span>
+          </div>
+        </details>
       </div>
     </section>
   </main>
