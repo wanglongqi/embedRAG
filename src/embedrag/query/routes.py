@@ -126,7 +126,11 @@ async def _run_search_pipeline(
         # Fusion
         t_fusion = time.monotonic()
         if sparse_results and dense_results:
-            fused = rrf_fuse(dense_results, sparse_results, top_k)
+            fused = rrf_fuse(
+                dense_results, sparse_results, top_k,
+                dense_weight=config.search.dense_weight,
+                sparse_weight=config.search.sparse_weight,
+            )
             chunk_ids = [f.chunk_id for f in fused]
             score_map = {f.chunk_id: f.rrf_score for f in fused}
             score_type = "rrf"
@@ -279,7 +283,11 @@ async def search_multi(request: Request, body: MultiSpaceSearchRequest) -> Multi
             )
 
         if sparse_results and all_dense_results:
-            fused = rrf_fuse(all_dense_results, sparse_results, top_k)
+            fused = rrf_fuse(
+                all_dense_results, sparse_results, top_k,
+                dense_weight=config.search.dense_weight,
+                sparse_weight=config.search.sparse_weight,
+            )
             chunk_ids = [f.chunk_id for f in fused]
             score_map = {f.chunk_id: f.rrf_score for f in fused}
         elif all_dense_results:
@@ -377,7 +385,11 @@ async def debug_search(request: Request, body: DebugSearchRequest) -> DebugSearc
         t_fusion = time.monotonic()
         fused_list = []
         if sparse_results and dense_results:
-            fused_list = rrf_fuse(dense_results, sparse_results, top_k)
+            fused_list = rrf_fuse(
+                dense_results, sparse_results, top_k,
+                dense_weight=config.search.dense_weight,
+                sparse_weight=config.search.sparse_weight,
+            )
             chunk_ids = [f.chunk_id for f in fused_list]
             score_map = {f.chunk_id: f.rrf_score for f in fused_list}
         elif dense_results:
@@ -474,6 +486,8 @@ async def debug_search(request: Request, body: DebugSearchRequest) -> DebugSearc
             "enable_hierarchy_expand": config.search.enable_hierarchy_expand,
             "max_top_k": config.search.max_top_k,
             "context_depth": config.search.context_depth,
+            "dense_weight": config.search.dense_weight,
+            "sparse_weight": config.search.sparse_weight,
             "embedding_api_format": config.embedding.api_format,
         },
     )
@@ -596,6 +610,32 @@ async def trigger_sync(request: Request, body: SyncTriggerRequest | None = None)
     source_url = (body.source_url if body else "").strip()
     if source_url:
         from pathlib import Path
+
+        from embedrag.shared.archive import is_archive_url
+
+        if is_archive_url(source_url):
+            from embedrag.models.manifest import Manifest
+            from embedrag.query.lifecycle.startup import load_generation, quick_verify_snapshot
+            from embedrag.shared.archive import download_and_extract_archive, verify_archive_snapshot
+
+            staging = str(Path(state.config.node.data_dir) / "staging" / "archive_sync")
+            snap_dir = download_and_extract_archive(
+                source_url, staging,
+                timeout=state.config.sync.download_timeout_seconds,
+            )
+            manifest = verify_archive_snapshot(snap_dir)
+            current = state.gen_manager.active_version
+            if manifest.snapshot_version == current:
+                return {"status": "already_loaded", "source": source_url, "version": current}
+            if not quick_verify_snapshot(snap_dir, manifest):
+                raise HTTPException(status_code=500, detail="Archive snapshot integrity check failed")
+            ctx = load_generation(
+                snap_dir, manifest,
+                nprobe=state.config.index.nprobe,
+                use_mmap=state.config.index.mmap,
+            )
+            await state.gen_manager.swap(ctx)
+            return {"status": "synced", "source": source_url, "version": manifest.snapshot_version}
 
         from embedrag.query.sync.downloader import SnapshotDownloader
         from embedrag.query.sync.syncer import SnapshotSyncer

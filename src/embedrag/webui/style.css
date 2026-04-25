@@ -660,6 +660,13 @@ table.debug-table tr:hover { background: var(--primary-light); }
   margin-bottom: 0.25rem;
 }
 
+.sync-source-hint {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  opacity: 0.75;
+  margin-bottom: 0.4rem;
+}
+
 .sync-source-row {
   display: flex;
   gap: 0.5rem;

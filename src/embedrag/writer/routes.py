@@ -11,6 +11,8 @@ from fastapi import APIRouter, Request
 
 from embedrag.logging_setup import get_logger
 from embedrag.models.api import (
+    ArchiveRequest,
+    ArchiveResponse,
     BuildRequest,
     BuildResponse,
     DeleteDocumentResponse,
@@ -221,4 +223,59 @@ async def publish(request: Request) -> PublishResponse:
         version=state.current_version,
         upload_time_seconds=round(elapsed, 2),
         snapshot_size_bytes=snapshot_size,
+    )
+
+
+VALID_ARCHIVE_FORMATS = {"tar.zst", "tar.zstd", "tar.gz", "tgz", "tar"}
+
+
+@router.post("/build/archive")
+async def build_archive(request: Request, body: ArchiveRequest = ArchiveRequest()) -> ArchiveResponse:
+    """Create a downloadable archive (.tar.zst, .tar.gz, .tgz, .tar) from the latest build.
+
+    Requires a prior ``/build`` call.  The archive is written next to the
+    snapshot directory and can be served directly or uploaded to a CDN /
+    GitHub Release.
+    """
+    state = _get_state(request)
+    if not state.current_version or not state.last_manifest:
+        raise ValueError("No build available. Run /build first.")
+
+    fmt = body.format.lower().lstrip(".")
+    if fmt not in VALID_ARCHIVE_FORMATS:
+        raise ValueError(
+            f"Unsupported format {body.format!r}. "
+            f"Choose from: {', '.join(sorted(VALID_ARCHIVE_FORMATS))}"
+        )
+
+    from embedrag.shared.archive import create_snapshot_archive
+
+    t0 = time.monotonic()
+    snapshot_dir = str(state.build_dir / state.current_version)
+    ext = fmt if fmt != "tgz" else "tar.gz"
+    archive_name = f"{state.current_version}.{ext}"
+    archive_path = str(state.build_dir / archive_name)
+
+    size = create_snapshot_archive(
+        snapshot_dir,
+        archive_path,
+        format=fmt,
+        compression_level=body.compression_level,
+    )
+    elapsed = time.monotonic() - t0
+
+    logger.info(
+        "archive_built",
+        version=state.current_version,
+        format=fmt,
+        path=archive_path,
+        size_mb=round(size / 1024 / 1024, 2),
+        elapsed_s=round(elapsed, 1),
+    )
+    return ArchiveResponse(
+        version=state.current_version,
+        format=fmt,
+        path=archive_path,
+        size_bytes=size,
+        build_time_seconds=round(elapsed, 2),
     )

@@ -149,6 +149,12 @@ def create_query_app(config_path: str | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
+    from starlette.responses import Response
+
+    @app.get("/sw.js", include_in_schema=False)
+    async def _no_service_worker():
+        return Response(status_code=204)
+
     from embedrag.query.routes import router
 
     app.include_router(router)

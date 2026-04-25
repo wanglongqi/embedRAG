@@ -6,7 +6,7 @@ node:
 embedding:
   service_url: http://127.0.0.1:1234/v1/embeddings
   api_format: openai
-  model: text-embedding-mxbai-embed-large-v1
+  model: text-embedding-qwen3-embedding-0.6b
   batch_size: 32
   timeout_seconds: 120
   retry_count: 3

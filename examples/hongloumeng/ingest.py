@@ -11,7 +11,7 @@ from pathlib import Path
 
 import requests
 
-DATA_DIR = Path(__file__).parent.parent / "data" / "hongloumeng"
+DATA_DIR = Path(__file__).parent.parent.parent / "data" / "hongloumeng"
 
 
 def extract_chapter_title(text: str, chapter_num: int) -> str:
@@ -24,12 +24,13 @@ def extract_chapter_title(text: str, chapter_num: int) -> str:
 
 
 def clean_text(text: str) -> str:
-    """Remove navigation lines and public domain notices."""
+    """Remove navigation lines and public domain notices, preserving paragraph breaks."""
+    skip_exact = {"回目录　下一回", "上一回　回目录　下一回", "上一回　回目录"}
     lines = text.split("\n")
     cleaned = []
     for line in lines:
         stripped = line.strip()
-        if stripped in ("", "回目录　下一回", "上一回　回目录　下一回", "上一回　回目录"):
+        if stripped in skip_exact:
             continue
         if "公有领域" in stripped or "Public domain" in stripped:
             continue
@@ -83,7 +84,7 @@ def main():
                     "title": title,
                     "text": text,
                     "doc_type": "novel_chapter",
-                    "chunking": "structured",
+                    "chunking": "paragraph",
                     "source": "红楼梦",
                     "metadata": {
                         "book": "红楼梦",

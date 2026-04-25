@@ -1,12 +1,13 @@
 # Example: 红楼梦 (Dream of the Red Chamber)
 
-Full-text indexing of all 120 chapters. Demonstrates **structured chunking** for long novel chapters with hierarchical text.
+Full-text indexing of all 120 chapters with hybrid dense+sparse retrieval.
 
 ## Stats
 
-- 120 chapters, ~2362 chunks, 1024-dim embeddings, 3 FAISS shards
-- Chunking strategy: `structured` (heading-aware 3-level tree)
-- Build time: ~1s, Ingestion time: ~200s (depends on embedding speed)
+- 120 chapters, ~1631 chunks, 1024-dim embeddings (`text-embedding-qwen3-embedding-0.6b`), 4 FAISS shards
+- Chunking strategy: `paragraph` (split on natural paragraph boundaries `\n\n`)
+- Hybrid search: dense (FAISS) + sparse (FTS5 trigram) fused via RRF
+- Build time: ~1s, Ingestion time: depends on embedding service speed
 
 ## Quick Start
 
@@ -25,9 +26,24 @@ curl -X POST http://localhost:8000/search/text \
 open http://localhost:8000/ui/
 ```
 
-### Option B: Build from scratch
+### Option B: Pull pre-built snapshot from a URL
 
-Requires an OpenAI-compatible embedding service at `127.0.0.1:1234`.
+```bash
+# Pull from a GitHub Release or any HTTP URL
+uv run embedrag pull https://github.com/<user>/<repo>/releases/download/v1/hongloumeng.tar.zst \
+  --output examples/hongloumeng/snapshot/active
+
+# Or pull from a snapshot server (base URL with latest.json)
+uv run embedrag pull https://cdn.example.com/snapshots/hongloumeng/ \
+  --output examples/hongloumeng/snapshot/active
+
+# Start the query node
+uv run embedrag query --config examples/hongloumeng/query.yaml
+```
+
+### Option C: Build from scratch
+
+Requires an OpenAI-compatible embedding service (see `writer.yaml` for URL and model).
 
 ```bash
 # 1. Start the writer node
@@ -46,7 +62,7 @@ uv run embedrag query --config examples/hongloumeng/query.yaml
 
 ## Files
 
-- `writer.yaml` -- Writer node config (embedding via OpenAI-format API)
-- `query.yaml` -- Query node config (reads from `snapshot/` directory)
+- `writer.yaml` -- Writer node config (embedding service URL and model)
+- `query.yaml` -- Query node config (reads from `snapshot/`)
 - `ingest.py` -- Ingestion script that reads `data/hongloumeng/` and POSTs to `/ingest`
-- `snapshot/` -- Pre-built index data (gitignored; build from scratch if missing)
+- `snapshot/` -- Pre-built index data (gitignored; build from scratch or pull if missing)

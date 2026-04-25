@@ -70,6 +70,8 @@ class SearchConfig(BaseModel):
     enable_sparse: bool = True
     enable_hierarchy_expand: bool = True
     context_depth: int = 1
+    dense_weight: float = 1.0
+    sparse_weight: float = 1.0
 
 
 class HotfixConfig(BaseModel):

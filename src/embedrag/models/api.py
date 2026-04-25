@@ -50,6 +50,19 @@ class PublishResponse(BaseModel):
     snapshot_size_bytes: int
 
 
+class ArchiveRequest(BaseModel):
+    format: str = "tar.zst"
+    compression_level: int = 3
+
+
+class ArchiveResponse(BaseModel):
+    version: str
+    format: str
+    path: str
+    size_bytes: int
+    build_time_seconds: float
+
+
 class DeleteDocumentResponse(BaseModel):
     doc_id: str
     chunks_deleted: int

@@ -202,9 +202,10 @@
         <details class="sync-source-panel">
           <summary>Sync from URL or Local Path</summary>
           <div class="sync-source-group">
-            <label class="sync-source-label">HTTP URL</label>
+            <label class="sync-source-label">Snapshot URL</label>
+            <div class="sync-source-hint">Base URL with latest.json, or direct archive link (.tar.zst / .tar.gz) e.g. GitHub Release asset</div>
             <div class="sync-source-row">
-              <input type="text" id="syncUrlInput" placeholder="https://cdn.example.com/snapshots/">
+              <input type="text" id="syncUrlInput" placeholder="https://github.com/user/repo/releases/download/v1/snapshot.tar.zst">
               <button class="btn-primary btn-sm-action" id="syncUrlBtn">Sync</button>
             </div>
             <span class="sync-action-status" id="syncUrlStatus"></span>
