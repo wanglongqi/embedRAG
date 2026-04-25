@@ -1,0 +1,29 @@
+node:
+  role: writer
+  node_id: qts-writer
+  data_dir: /tmp/embedrag-qts
+
+embedding:
+  service_url: http://127.0.0.1:1234/v1/embeddings
+  api_format: openai
+  model: text-embedding-mxbai-embed-large-v1
+  batch_size: 32
+  timeout_seconds: 120
+  retry_count: 3
+
+index_build:
+  num_shards: 4
+  ivf_nlist: 1024
+  pq_m: 64
+  train_sample_size: 500000
+  compression: zstd
+  compression_level: 3
+
+server:
+  host: 0.0.0.0
+  port: 8001
+  workers: 1
+
+logging:
+  level: INFO
+  format: console
