@@ -1,0 +1,61 @@
+node:
+  role: writer
+  node_id: auto
+  data_dir: /data/embedrag-writer
+
+object_store:
+  provider: s3
+  endpoint: ""
+  bucket: embedrag-data
+  prefix: snapshots/
+  access_key_env: AWS_ACCESS_KEY_ID
+  secret_key_env: AWS_SECRET_ACCESS_KEY
+  region: us-east-1
+
+db:
+  path: ""
+  wal_autocheckpoint: 1000
+  cache_size_mb: 64
+
+embedding:
+  service_url: http://embedding-service:8080/embed
+  api_format: embedrag        # "embedrag" or "openai"
+  api_key: ""                # Bearer token for OpenAI format
+  model: ""                  # model name for OpenAI format (e.g. "text-embedding-3-large")
+  batch_size: 64
+  timeout_seconds: 30
+  retry_count: 3
+
+# ── OpenAI embedding example (uncomment to use) ──
+# embedding:
+#   service_url: https://api.openai.com/v1/embeddings
+#   api_format: openai
+#   api_key: OPENAI_API_KEY
+#   model: text-embedding-3-large
+#   batch_size: 64
+#   timeout_seconds: 30
+#   retry_count: 3
+
+index_build:
+  num_shards: 4
+  ivf_nlist: 4096
+  pq_m: 64
+  train_sample_size: 500000
+  compression: zstd
+  compression_level: 3
+
+server:
+  host: 0.0.0.0
+  port: 8001
+  workers: 1
+  readiness_delay_seconds: 0
+  shutdown_drain_seconds: 30
+
+logging:
+  level: INFO
+  format: json
+  access_log: true
+
+metrics:
+  enabled: true
+  port: 9091

@@ -1,0 +1,71 @@
+node:
+  role: query
+  node_id: auto
+  data_dir: /data/embedrag
+
+object_store:
+  provider: s3
+  endpoint: ""
+  bucket: embedrag-data
+  prefix: snapshots/
+  access_key_env: AWS_ACCESS_KEY_ID
+  secret_key_env: AWS_SECRET_ACCESS_KEY
+  region: us-east-1
+
+snapshot:
+  bootstrap_version: latest
+  poll_interval_seconds: 300
+  download_concurrency: 4
+  download_timeout_seconds: 600
+  disk_reserve_bytes: 5368709120
+
+index:
+  num_shards: 4
+  nprobe: 32
+  mmap: true
+
+search:
+  default_top_k: 10
+  max_top_k: 100
+  enable_sparse: true
+  enable_hierarchy_expand: true
+  context_depth: 1
+
+hotfix:
+  enabled: true
+  max_vectors: 10000
+
+embedding:
+  service_url: http://embedding-service:8080/embed
+  api_format: embedrag        # "embedrag" or "openai"
+  api_key: ""                # Bearer token for OpenAI format
+  model: ""                  # model name for OpenAI format (e.g. "text-embedding-3-large")
+  batch_size: 64
+  timeout_seconds: 30
+  retry_count: 3
+
+# ── OpenAI embedding example (uncomment to use) ──
+# embedding:
+#   service_url: https://api.openai.com/v1/embeddings
+#   api_format: openai
+#   api_key: OPENAI_API_KEY   # env var name or literal key
+#   model: text-embedding-3-large
+#   batch_size: 64
+#   timeout_seconds: 30
+#   retry_count: 3
+
+server:
+  host: 0.0.0.0
+  port: 8000
+  workers: 1
+  readiness_delay_seconds: 0
+  shutdown_drain_seconds: 30
+
+logging:
+  level: INFO
+  format: json
+  access_log: true
+
+metrics:
+  enabled: true
+  port: 9090

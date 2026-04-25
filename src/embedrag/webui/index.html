@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmbedRAG</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <h1>EmbedRAG</h1>
+      <span class="version-badge" id="versionBadge">--</span>
+    </div>
+    <nav>
+      <button class="tab active" data-tab="search">Search</button>
+      <button class="tab" data-tab="debug">Debug</button>
+      <button class="tab" data-tab="status">Status</button>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+      <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+      </svg>
+    </button>
+  </header>
+
+  <main>
+    <!-- Search Tab -->
+    <section id="tab-search" class="tab-content active">
+      <div class="search-bar">
+        <input type="text" id="searchQuery" placeholder="Enter your query..." autocomplete="off">
+        <div class="search-controls">
+          <select id="searchSpace" title="Embedding space">
+            <option value="text">text</option>
+          </select>
+          <select id="searchMode">
+            <option value="hybrid">Hybrid</option>
+            <option value="dense">Dense Only</option>
+            <option value="sparse">Sparse Only</option>
+          </select>
+          <label class="slider-label">
+            Top K: <span id="topKValue">10</span>
+            <input type="range" id="topK" min="1" max="50" value="10">
+          </label>
+          <button class="btn-primary" id="searchBtn">Search</button>
+          <button class="btn-rerank" id="rerankBtn" style="display:none" title="Re-score results using a cross-encoder reranker model">Rerank</button>
+          <span class="rerank-status" id="rerankStatus"></span>
+        </div>
+      </div>
+      <div class="filters-panel" id="filtersPanel">
+        <details>
+          <summary>Filters</summary>
+          <div class="filter-row">
+            <label>doc_type <input type="text" id="filterDocType" placeholder="e.g. markdown"></label>
+            <label>doc_id <input type="text" id="filterDocId" placeholder="e.g. doc-001"></label>
+          </div>
+        </details>
+        <details>
+          <summary>Reranker Settings</summary>
+          <div class="filter-row reranker-settings">
+            <label>API URL <input type="text" id="rerankUrl" placeholder="http://127.0.0.1:1234/v1/embeddings"></label>
+            <label>Model <input type="text" id="rerankModel" placeholder="text-embedding-bge-reranker-v2-m3"></label>
+          </div>
+        </details>
+      </div>
+
+      <div id="searchTiming" class="timing-bar" style="display:none"></div>
+      <div id="searchResults" class="results-list"></div>
+    </section>
+
+    <!-- Debug Tab -->
+    <section id="tab-debug" class="tab-content">
+      <div class="search-bar">
+        <input type="text" id="debugQuery" placeholder="Enter debug query..." autocomplete="off">
+        <div class="search-controls">
+          <select id="debugSpace" title="Embedding space">
+            <option value="text">text</option>
+          </select>
+          <select id="debugMode">
+            <option value="hybrid">Hybrid</option>
+            <option value="dense">Dense Only</option>
+            <option value="sparse">Sparse Only</option>
+          </select>
+          <label class="slider-label">
+            Top K: <span id="debugTopKValue">10</span>
+            <input type="range" id="debugTopK" min="1" max="50" value="10">
+          </label>
+          <button class="btn-primary" id="debugBtn">Debug Search</button>
+          <button class="btn-rerank" id="debugRerankBtn" style="display:none" title="Re-score results using the reranker and compare">Rerank</button>
+          <span class="rerank-status" id="debugRerankStatus"></span>
+        </div>
+      </div>
+
+      <div id="debugOutput" style="display:none">
+        <div class="debug-section">
+          <h3>Pipeline Config</h3>
+          <pre id="debugConfig" class="code-block"></pre>
+        </div>
+        <div class="debug-section">
+          <h3>FTS5 Query</h3>
+          <pre id="debugFtsQuery" class="code-block"></pre>
+        </div>
+        <div class="debug-section">
+          <h3>Timing Waterfall</h3>
+          <div id="debugWaterfall" class="waterfall"></div>
+        </div>
+        <div class="debug-columns">
+          <div class="debug-section">
+            <h3>Dense Results <span class="count" id="denseCount"></span></h3>
+            <div id="debugDense" class="debug-table-wrap"></div>
+          </div>
+          <div class="debug-section">
+            <h3>Sparse Results <span class="count" id="sparseCount"></span></h3>
+            <div id="debugSparse" class="debug-table-wrap"></div>
+          </div>
+        </div>
+        <div class="debug-section">
+          <h3>Fused Results (RRF) <span class="count" id="fusedCount"></span></h3>
+          <div id="debugFused" class="debug-table-wrap"></div>
+        </div>
+        <div class="debug-section" id="debugRerankSection" style="display:none">
+          <h3>Rerank Analysis</h3>
+          <div id="debugRerankTable" class="debug-table-wrap"></div>
+        </div>
+        <div class="debug-section">
+          <h3>Final Chunks</h3>
+          <div id="debugChunks" class="results-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Status Tab -->
+    <section id="tab-status" class="tab-content">
+      <div class="status-grid" id="statusGrid">
+        <div class="status-card">
+          <h3>Health</h3>
+          <div class="status-value" id="statusHealth">--</div>
+        </div>
+        <div class="status-card">
+          <h3>Active Version</h3>
+          <div class="status-value" id="statusVersion">--</div>
+        </div>
+        <div class="status-card">
+          <h3>Vector Count</h3>
+          <div class="status-value" id="statusVectors">--</div>
+        </div>
+        <div class="status-card">
+          <h3>Document Count</h3>
+          <div class="status-value" id="statusDocs">--</div>
+        </div>
+        <div class="status-card">
+          <h3>Embedding Service</h3>
+          <div class="status-value" id="statusEmbed">--</div>
+        </div>
+      </div>
+      <button class="btn-primary" id="statusRefresh" style="margin-top:1rem">Refresh Status</button>
+
+      <!-- Sync Panel -->
+      <div class="sync-panel" id="syncPanel">
+        <h2>Snapshot Sync</h2>
+        <div class="sync-info-grid">
+          <div class="sync-info-item">
+            <span class="sync-label">Status</span>
+            <span class="sync-val" id="syncEnabled">--</span>
+          </div>
+          <div class="sync-info-item">
+            <span class="sync-label">Source</span>
+            <span class="sync-val" id="syncSource">--</span>
+          </div>
+          <div class="sync-info-item">
+            <span class="sync-label">Schedule</span>
+            <span class="sync-val" id="syncSchedule">--</span>
+          </div>
+          <div class="sync-info-item">
+            <span class="sync-label">Last Check</span>
+            <span class="sync-val" id="syncLastCheck">--</span>
+          </div>
+          <div class="sync-info-item">
+            <span class="sync-label">Last Result</span>
+            <span class="sync-val" id="syncLastResult">--</span>
+          </div>
+          <div class="sync-info-item">
+            <span class="sync-label">Last Synced Version</span>
+            <span class="sync-val" id="syncLastVersion">--</span>
+          </div>
+          <div class="sync-info-item">
+            <span class="sync-label">Next Check</span>
+            <span class="sync-val" id="syncNextCheck">--</span>
+          </div>
+          <div class="sync-info-item">
+            <span class="sync-label">Errors</span>
+            <span class="sync-val" id="syncErrors">--</span>
+          </div>
+        </div>
+        <div class="sync-actions">
+          <button class="btn-primary" id="syncTriggerBtn" title="Trigger sync using configured source">Sync Now</button>
+          <span class="sync-action-status" id="syncTriggerStatus"></span>
+        </div>
+        <details class="sync-source-panel">
+          <summary>Sync from URL or Local Path</summary>
+          <div class="sync-source-group">
+            <label class="sync-source-label">HTTP URL</label>
+            <div class="sync-source-row">
+              <input type="text" id="syncUrlInput" placeholder="https://cdn.example.com/snapshots/">
+              <button class="btn-primary btn-sm-action" id="syncUrlBtn">Sync</button>
+            </div>
+            <span class="sync-action-status" id="syncUrlStatus"></span>
+          </div>
+          <div class="sync-source-group">
+            <label class="sync-source-label">Local snapshot directory</label>
+            <div class="sync-source-row">
+              <input type="text" id="syncDirInput" placeholder="/data/embedrag/active/v1776948753">
+              <button class="btn-primary btn-sm-action" id="syncDirBtn">Load</button>
+            </div>
+            <span class="sync-action-status" id="syncDirStatus"></span>
+          </div>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>EmbedRAG Query Node</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
