@@ -33,8 +33,10 @@ from embedrag.models.api import (
     TextSearchRequest,
 )
 from embedrag.query.index.hotfix import HotfixChunkData
+from embedrag.query.retrieval.dense import DenseResult, DenseRetriever
 from embedrag.query.retrieval.fusion import rrf_fuse
 from embedrag.query.retrieval.hierarchy_expand import HierarchyExpander
+from embedrag.query.retrieval.sparse import SparseResult, SparseRetriever
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -103,27 +105,21 @@ async def _run_search_pipeline(
 
         dense_ms = 0.0
         sparse_ms = 0.0
-        dense_results = []
-        sparse_results = []
+        dense_results: list[DenseResult] = []
+        sparse_results: list[SparseResult] = []
 
         if mode != "sparse":
-            from embedrag.query.retrieval.dense import DenseRetriever
-
             dense_retriever = DenseRetriever(shard_mgr)
             deleted = hotfix._deleted_ids if hotfix else set()
             dense_results, dense_ms = dense_retriever.search(query_vec, top_k * 2, deleted)
 
             if hotfix and hotfix.size > 0:
-                from embedrag.query.retrieval.dense import DenseResult
-
                 hotfix_results = hotfix.search(query_vec, top_k)
                 for cid, score in hotfix_results:
                     dense_results.append(DenseResult(chunk_id=cid, score=score))
                 dense_results.sort(key=lambda r: r.score, reverse=True)
 
         if mode != "dense" and config.search.enable_sparse and query_text:
-            from embedrag.query.retrieval.sparse import SparseRetriever
-
             sparse_retriever = SparseRetriever(ctx.db_pool)
             sparse_results, sparse_ms = sparse_retriever.search(query_text, top_k * 2, filters)
 
@@ -249,13 +245,11 @@ async def search_multi(request: Request, body: MultiSpaceSearchRequest) -> Multi
     top_k = min(body.top_k, config.search.max_top_k)
     t_total = time.monotonic()
 
-    all_dense_results: list = []
+    all_dense_results: list[DenseResult] = []
     per_space_counts: dict[str, int] = {}
 
     async with state.gen_manager.acquire() as ctx:
         for sq in body.queries:
-            from embedrag.query.retrieval.dense import DenseResult, DenseRetriever
-
             shard_mgr = ctx.get_shard_manager(sq.space)
             hotfix = ctx.get_hotfix_buffer(sq.space)
             dense_retriever = DenseRetriever(shard_mgr)
@@ -274,16 +268,14 @@ async def search_multi(request: Request, body: MultiSpaceSearchRequest) -> Multi
             per_space_counts[sq.space] = len(results)
 
         # Sparse retrieval on the text query from the first text-space query
-        sparse_results = []
+        sparse_results: list[SparseResult] = []
         first_text_query = next(
             (sq for sq in body.queries if sq.query_text and sq.space == "text"), None
         )
         if first_text_query and config.search.enable_sparse:
-            from embedrag.query.retrieval.sparse import SparseRetriever
-
             sparse_retriever = SparseRetriever(ctx.db_pool)
             sparse_results, _ = sparse_retriever.search(
-                first_text_query.query_text, top_k * 2, body.filters
+                first_text_query.query_text or "", top_k * 2, body.filters
             )
 
         if sparse_results and all_dense_results:
@@ -356,15 +348,13 @@ async def debug_search(request: Request, body: DebugSearchRequest) -> DebugSearc
         fts_query_str = " | ".join(parts)
 
     async with state.gen_manager.acquire() as ctx:
-        dense_results = []
-        sparse_results = []
+        dense_results: list[DenseResult] = []
+        sparse_results: list[SparseResult] = []
         dense_ms = 0.0
         sparse_ms = 0.0
         space = body.space if hasattr(body, "space") else "text"
 
         if body.mode != "sparse":
-            from embedrag.query.retrieval.dense import DenseRetriever
-
             shard_mgr = ctx.get_shard_manager(space)
             hotfix = ctx.get_hotfix_buffer(space)
             dense_retriever = DenseRetriever(shard_mgr)
@@ -372,16 +362,12 @@ async def debug_search(request: Request, body: DebugSearchRequest) -> DebugSearc
             dense_results, dense_ms = dense_retriever.search(query_vec, top_k * 2, deleted)
 
             if hotfix and hotfix.size > 0:
-                from embedrag.query.retrieval.dense import DenseResult
-
                 hotfix_hits = hotfix.search(query_vec, top_k)
                 for cid, score in hotfix_hits:
                     dense_results.append(DenseResult(chunk_id=cid, score=score))
                 dense_results.sort(key=lambda r: r.score, reverse=True)
 
         if body.mode != "dense" and config.search.enable_sparse and body.query_text:
-            from embedrag.query.retrieval.sparse import SparseRetriever
-
             sparse_retriever = SparseRetriever(ctx.db_pool)
             sparse_results, sparse_ms = sparse_retriever.search(
                 body.query_text, top_k * 2, body.filters

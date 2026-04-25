@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, Request
@@ -22,6 +23,7 @@ from embedrag.models.chunk import ChunkNode, Document
 from embedrag.shared.object_store import ObjectStoreClient
 from embedrag.writer.chunking.hierarchy import build_closure_entries
 from embedrag.writer.chunking.splitter import split_document
+from embedrag.models.manifest import IndexInfo
 from embedrag.writer.index_builder import IndexBuilder
 from embedrag.writer.snapshot import SnapshotPackager, SnapshotPublisher
 
@@ -29,7 +31,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-def _get_state(request: Request):
+def _get_state(request: Request) -> Any:
     return request.app.state.writer
 
 
@@ -132,7 +134,7 @@ async def build(request: Request, body: BuildRequest = BuildRequest()) -> BuildR
     if not spaces:
         raise ValueError("No chunks with embeddings found")
 
-    space_index_infos: dict[str, object] = {}
+    space_index_infos: dict[str, IndexInfo] = {}
     space_id_map_paths: dict[str, str] = {}
     total_vectors = 0
 

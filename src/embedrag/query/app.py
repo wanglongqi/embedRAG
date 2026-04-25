@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 
@@ -26,7 +27,7 @@ class QueryState:
         for space in config.embedding.get_all_spaces():
             space_cfg = config.embedding.get_space_config(space)
             self.embedding_clients[space] = EmbeddingClient(space_cfg)
-        self.syncer = None  # set by lifecycle/bootstrap
+        self.syncer: Any = None  # set by lifecycle/bootstrap
 
     def get_embedding_client(self, space: str = "text") -> EmbeddingClient:
         if space not in self.embedding_clients:
@@ -80,20 +81,20 @@ async def query_lifespan(app: FastAPI) -> AsyncIterator[None]:
             else:
                 from embedrag.shared.http_snapshot_client import HttpSnapshotClient
 
-                client = HttpSnapshotClient(
+                h_client = HttpSnapshotClient(
                     config.sync.http_url,
                     timeout=config.sync.download_timeout_seconds,
                 )
                 staging = str(_Path(config.node.data_dir) / "staging")
                 downloader = SnapshotDownloader(
-                    client,
+                    h_client,
                     staging,
                     concurrency=config.sync.download_concurrency,
                     timeout=config.sync.download_timeout_seconds,
                 )
                 state.syncer = SnapshotSyncer(
                     state,
-                    client,
+                    h_client,
                     downloader,
                     cron_expr=config.sync.cron,
                     poll_interval=config.sync.poll_interval_seconds,
@@ -103,17 +104,17 @@ async def query_lifespan(app: FastAPI) -> AsyncIterator[None]:
             from embedrag.shared.object_store import ObjectStoreClient
 
             try:
-                client = ObjectStoreClient(config.object_store)
+                o_client = ObjectStoreClient(config.object_store)
                 staging = str(_Path(config.node.data_dir) / "staging")
                 downloader = SnapshotDownloader(
-                    client,
+                    o_client,
                     staging,
                     concurrency=config.sync.download_concurrency,
                     timeout=config.sync.download_timeout_seconds,
                 )
                 state.syncer = SnapshotSyncer(
                     state,
-                    client,
+                    o_client,
                     downloader,
                     cron_expr=config.sync.cron,
                     poll_interval=config.sync.poll_interval_seconds,

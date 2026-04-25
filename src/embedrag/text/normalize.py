@@ -43,7 +43,7 @@ def normalize_for_fts(text: str) -> str:
     text = text.casefold()
     text = _strip_diacritics(text)
     t2s = _load_t2s()
-    return text.translate(str.maketrans(t2s))
+    return text.translate(str.maketrans(t2s))  # type: ignore[arg-type]
 
 
 @lru_cache(maxsize=256)

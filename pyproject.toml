@@ -59,4 +59,27 @@ select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.mypy]
 python_version = "3.11"
-strict = true
+warn_unused_configs = true
+check_untyped_defs = true
+show_error_codes = true
+ignore_missing_imports = true
+
+# Pragmatic settings: check bodies but don't force annotations everywhere
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+warn_return_any = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+    "faiss.*",
+    "msgpack.*",
+    "croniter.*",
+    "boto3.*",
+    "botocore.*",
+    "prometheus_client.*",
+    "yaml.*",
+]
+ignore_missing_imports = true

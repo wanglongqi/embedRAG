@@ -31,17 +31,17 @@ def rrf_fuse(
     """
     scores: dict[str, dict] = {}
 
-    for rank, r in enumerate(dense_results):
-        if r.chunk_id not in scores:
-            scores[r.chunk_id] = {"rrf": 0.0, "dense": r.score, "sparse": 0.0}
-        scores[r.chunk_id]["rrf"] += dense_weight / (k + rank + 1)
-        scores[r.chunk_id]["dense"] = max(scores[r.chunk_id]["dense"], r.score)
+    for rank, dr in enumerate(dense_results):
+        if dr.chunk_id not in scores:
+            scores[dr.chunk_id] = {"rrf": 0.0, "dense": dr.score, "sparse": 0.0}
+        scores[dr.chunk_id]["rrf"] += dense_weight / (k + rank + 1)
+        scores[dr.chunk_id]["dense"] = max(scores[dr.chunk_id]["dense"], dr.score)
 
-    for rank, r in enumerate(sparse_results):
-        if r.chunk_id not in scores:
-            scores[r.chunk_id] = {"rrf": 0.0, "dense": 0.0, "sparse": r.score}
-        scores[r.chunk_id]["rrf"] += sparse_weight / (k + rank + 1)
-        scores[r.chunk_id]["sparse"] = max(scores[r.chunk_id]["sparse"], r.score)
+    for rank, sr in enumerate(sparse_results):
+        if sr.chunk_id not in scores:
+            scores[sr.chunk_id] = {"rrf": 0.0, "dense": 0.0, "sparse": sr.score}
+        scores[sr.chunk_id]["rrf"] += sparse_weight / (k + rank + 1)
+        scores[sr.chunk_id]["sparse"] = max(scores[sr.chunk_id]["sparse"], sr.score)
 
     fused = [
         FusedResult(
