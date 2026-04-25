@@ -29,7 +29,6 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass
-from typing import Optional
 
 from embedrag.logging_setup import get_logger
 from embedrag.query.storage import ReadOnlySQLitePool
@@ -42,21 +41,21 @@ _FTS5_SPECIAL = re.compile(r'["\(\)\*\+\^{}:]')
 # Scriptio-continua scripts: no inter-word spaces, need sliding-window
 # decomposition for FTS5 trigram to match across punctuation boundaries.
 _SCRIPTIO_CONTINUA = re.compile(
-    r'[\u0e01-\u0e5b'          # Thai
-    r'\u0e81-\u0edf'           # Lao
-    r'\u1000-\u109f'           # Myanmar (Burmese)
-    r'\u1780-\u17ff'           # Khmer
-    r'\u0f00-\u0fff'           # Tibetan
-    r'\u2e80-\u9fff'           # CJK Radicals, Kangxi, CJK Unified
-    r'\u3040-\u30ff'           # Hiragana + Katakana
-    r'\u31f0-\u31ff'           # Katakana Ext
-    r'\uac00-\ud7af'           # Hangul Syllables (Korean)
-    r'\u1100-\u11ff'           # Hangul Jamo
-    r'\u3130-\u318f'           # Hangul Compat Jamo
-    r'\ua960-\ua97f'           # Hangul Jamo Ext-A
-    r'\ud7b0-\ud7ff'           # Hangul Jamo Ext-B
-    r'\uf900-\ufaff'           # CJK Compat Ideographs
-    r'\U00020000-\U0002fa1f]'  # CJK Ext B-F + Compat Supplement
+    r"[\u0e01-\u0e5b"  # Thai
+    r"\u0e81-\u0edf"  # Lao
+    r"\u1000-\u109f"  # Myanmar (Burmese)
+    r"\u1780-\u17ff"  # Khmer
+    r"\u0f00-\u0fff"  # Tibetan
+    r"\u2e80-\u9fff"  # CJK Radicals, Kangxi, CJK Unified
+    r"\u3040-\u30ff"  # Hiragana + Katakana
+    r"\u31f0-\u31ff"  # Katakana Ext
+    r"\uac00-\ud7af"  # Hangul Syllables (Korean)
+    r"\u1100-\u11ff"  # Hangul Jamo
+    r"\u3130-\u318f"  # Hangul Compat Jamo
+    r"\ua960-\ua97f"  # Hangul Jamo Ext-A
+    r"\ud7b0-\ud7ff"  # Hangul Jamo Ext-B
+    r"\uf900-\ufaff"  # CJK Compat Ideographs
+    r"\U00020000-\U0002fa1f]"  # CJK Ext B-F + Compat Supplement
 )
 
 TRIGRAM_MIN_LEN = 3
@@ -86,7 +85,7 @@ class SparseRetriever:
         self,
         query_text: str,
         top_k: int,
-        filters: Optional[dict] = None,
+        filters: dict | None = None,
     ) -> tuple[list[SparseResult], float]:
         """Search using FTS5 trigram + LIKE fallback for short terms.
 
@@ -118,7 +117,8 @@ class SparseRetriever:
             except Exception:
                 logger.warn(
                     "sparse_query_error",
-                    fts_segs=fts_segs[:3], short_segs=short_segs[:3],
+                    fts_segs=fts_segs[:3],
+                    short_segs=short_segs[:3],
                     exc_info=True,
                 )
 
@@ -129,16 +129,17 @@ class SparseRetriever:
 
     def _search_simple(self, conn, fts_query: str, top_k: int) -> list[SparseResult]:
         rows = conn.execute(
-            "SELECT chunk_id, rank "
-            "FROM chunks_fts WHERE text_norm MATCH ? "
-            "ORDER BY rank "
-            "LIMIT ?",
+            "SELECT chunk_id, rank FROM chunks_fts WHERE text_norm MATCH ? ORDER BY rank LIMIT ?",
             (fts_query, top_k),
         ).fetchall()
         return [SparseResult(chunk_id=r["chunk_id"], score=-r["rank"]) for r in rows]
 
     def _search_with_filters(
-        self, conn, fts_query: str, top_k: int, filters: dict,
+        self,
+        conn,
+        fts_query: str,
+        top_k: int,
+        filters: dict,
     ) -> list[SparseResult]:
         where_clauses: list[str] = []
         params: list = [fts_query]
@@ -171,7 +172,7 @@ class SparseRetriever:
         conn,
         terms: list[str],
         top_k: int,
-        filters: Optional[dict] = None,
+        filters: dict | None = None,
     ) -> list[SparseResult]:
         """LIKE-based fallback for terms shorter than the trigram minimum.
 
@@ -192,7 +193,7 @@ class SparseRetriever:
             )
             terms = terms[:MAX_LIKE_TERMS]
 
-        where_parts = [f"fc.c2 LIKE ?" for _ in terms]
+        where_parts = ["fc.c2 LIKE ?" for _ in terms]
         params: list = [f"%{t}%" for t in terms]
 
         text_clause = " OR ".join(where_parts)

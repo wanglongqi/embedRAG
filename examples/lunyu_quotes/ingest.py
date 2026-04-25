@@ -7,6 +7,7 @@ that EmbedRAG works correctly for non-hierarchical, short, independent texts.
 Usage:
     python examples/lunyu_quotes/ingest.py [--writer-url http://localhost:8001]
 """
+
 import argparse
 import re
 import sys
@@ -19,14 +20,33 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data" / "lunyu"
 
 NOISE_LINES = {
-    "姊妹计划: 数据项", "註疏", "返回頁首", "Public domainPublic domainfalsefalse",
+    "姊妹计划: 数据项",
+    "註疏",
+    "返回頁首",
+    "Public domainPublic domainfalsefalse",
 }
 
 CHAPTER_NAMES = {
-    1: "學而", 2: "爲政", 3: "八佾", 4: "里仁", 5: "公冶長",
-    6: "雍也", 7: "述而", 8: "泰伯", 9: "子罕", 10: "鄉黨",
-    11: "先進", 12: "顏淵", 13: "子路", 14: "憲問", 15: "衛靈公",
-    16: "季氏", 17: "陽貨", 18: "微子", 19: "子張", 20: "堯曰",
+    1: "學而",
+    2: "爲政",
+    3: "八佾",
+    4: "里仁",
+    5: "公冶長",
+    6: "雍也",
+    7: "述而",
+    8: "泰伯",
+    9: "子罕",
+    10: "鄉黨",
+    11: "先進",
+    12: "顏淵",
+    13: "子路",
+    14: "憲問",
+    15: "衛靈公",
+    16: "季氏",
+    17: "陽貨",
+    18: "微子",
+    19: "子張",
+    20: "堯曰",
 }
 
 QUOTE_NUM = re.compile(r"^[一二三四五六七八九十百]+之[一二三四五六七八九十百]+$")
@@ -43,10 +63,12 @@ def parse_quotes(chapter_num: int, text: str) -> list[dict]:
         if current_id and current_lines:
             body = "\n".join(current_lines).strip()
             if body:
-                quotes.append({
-                    "quote_id": current_id,
-                    "text": body,
-                })
+                quotes.append(
+                    {
+                        "quote_id": current_id,
+                        "text": body,
+                    }
+                )
 
     for line in lines:
         stripped = line.strip()
@@ -107,22 +129,26 @@ def main():
 
         for q in quotes:
             doc_id = f"lunyu_{chapter_num:02d}_{q['quote_id']}"
-            all_docs.append({
-                "doc_id": doc_id,
-                "title": f"論語·{chapter_name}·{q['quote_id']}",
-                "text": q["text"],
-                "doc_type": "lunyu_quote",
-                "chunking": "plain",
-                "source": "論語",
-                "metadata": {
-                    "book": "論語",
-                    "chapter": chapter_num,
-                    "chapter_name": chapter_name,
-                    "quote_id": q["quote_id"],
-                },
-            })
+            all_docs.append(
+                {
+                    "doc_id": doc_id,
+                    "title": f"論語·{chapter_name}·{q['quote_id']}",
+                    "text": q["text"],
+                    "doc_type": "lunyu_quote",
+                    "chunking": "plain",
+                    "source": "論語",
+                    "metadata": {
+                        "book": "論語",
+                        "chapter": chapter_num,
+                        "chapter_name": chapter_name,
+                        "quote_id": q["quote_id"],
+                    },
+                }
+            )
 
-    print(f"Parsed {len(all_docs)} quotes from {len(list(DATA_DIR.glob('chapter_*.txt')))} chapters")
+    print(
+        f"Parsed {len(all_docs)} quotes from {len(list(DATA_DIR.glob('chapter_*.txt')))} chapters"
+    )
 
     total_docs = 0
     total_chunks = 0
@@ -130,7 +156,7 @@ def main():
 
     for i in range(0, len(all_docs), args.batch_size):
         batch = all_docs[i : i + args.batch_size]
-        desc = f"quotes {i+1}-{i+len(batch)}"
+        desc = f"quotes {i + 1}-{i + len(batch)}"
         print(f"  Ingesting {desc}...", end=" ", flush=True)
         t = time.time()
         try:
@@ -141,26 +167,28 @@ def main():
             r = resp.json()
             total_docs += r["ingested"]
             total_chunks += r["chunk_count"]
-            print(f"OK ({r['ingested']} docs, {r['chunk_count']} chunks, {time.time()-t:.1f}s)")
+            print(f"OK ({r['ingested']} docs, {r['chunk_count']} chunks, {time.time() - t:.1f}s)")
         except Exception as e:
             print(f"FAILED: {e}")
 
     elapsed = time.time() - t_start
-    print(f"\n=== Ingestion Complete ===")
+    print("\n=== Ingestion Complete ===")
     print(f"  Documents: {total_docs}")
     print(f"  Chunks:    {total_chunks}")
     print(f"  Time:      {elapsed:.1f}s")
-    print(f"  (Each quote is 1 doc = 1 chunk, no hierarchy)")
+    print("  (Each quote is 1 doc = 1 chunk, no hierarchy)")
 
-    print(f"\nBuilding index...", flush=True)
+    print("\nBuilding index...", flush=True)
     t = time.time()
     try:
         resp = requests.post(f"{args.writer_url}/build", json={}, timeout=600)
         resp.raise_for_status()
         r = resp.json()
-        print(f"Build complete: version={r['version']}, docs={r['doc_count']}, "
-              f"chunks={r['chunk_count']}, vectors={r['vector_count']}, "
-              f"shards={r['num_shards']}, time={time.time()-t:.1f}s")
+        print(
+            f"Build complete: version={r['version']}, docs={r['doc_count']}, "
+            f"chunks={r['chunk_count']}, vectors={r['vector_count']}, "
+            f"shards={r['num_shards']}, time={time.time() - t:.1f}s"
+        )
     except Exception as e:
         print(f"Build FAILED: {e}")
 

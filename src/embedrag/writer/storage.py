@@ -5,10 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
-import struct
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
-from typing import AsyncIterator, Iterator, Optional
 
 import numpy as np
 
@@ -102,8 +101,7 @@ class WriterSQLitePool:
                 """INSERT OR REPLACE INTO documents
                    (doc_id, title, source, doc_type, metadata_json)
                    VALUES (?, ?, ?, ?, ?)""",
-                (doc.doc_id, doc.title, doc.source, doc.doc_type,
-                 json.dumps(doc.metadata)),
+                (doc.doc_id, doc.title, doc.source, doc.doc_type, json.dumps(doc.metadata)),
             )
             conn.commit()
 
@@ -113,16 +111,13 @@ class WriterSQLitePool:
                 """INSERT OR REPLACE INTO documents
                    (doc_id, title, source, doc_type, metadata_json)
                    VALUES (?, ?, ?, ?, ?)""",
-                [(d.doc_id, d.title, d.source, d.doc_type,
-                  json.dumps(d.metadata)) for d in docs],
+                [(d.doc_id, d.title, d.source, d.doc_type, json.dumps(d.metadata)) for d in docs],
             )
             conn.commit()
 
-    async def get_document(self, doc_id: str) -> Optional[Document]:
+    async def get_document(self, doc_id: str) -> Document | None:
         async with self.read_conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM documents WHERE doc_id = ?", (doc_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM documents WHERE doc_id = ?", (doc_id,)).fetchone()
             if not row:
                 return None
             return Document(
@@ -140,11 +135,18 @@ class WriterSQLitePool:
             chunk_rows = []
             emb_rows = []
             for c in chunks:
-                chunk_rows.append((
-                    c.chunk_id, c.doc_id, c.parent_chunk_id,
-                    c.level, c.level_type, c.seq_in_parent,
-                    c.text, json.dumps(c.metadata),
-                ))
+                chunk_rows.append(
+                    (
+                        c.chunk_id,
+                        c.doc_id,
+                        c.parent_chunk_id,
+                        c.level,
+                        c.level_type,
+                        c.seq_in_parent,
+                        c.text,
+                        json.dumps(c.metadata),
+                    )
+                )
                 if c.embedding:
                     emb_rows.append((c.chunk_id, space, _embed_to_blob(c.embedding)))
             conn.executemany(
@@ -174,7 +176,8 @@ class WriterSQLitePool:
         async with self.write_conn() as conn:
             placeholders = ",".join("?" * len(doc_ids))
             chunk_ids = [
-                r[0] for r in conn.execute(
+                r[0]
+                for r in conn.execute(
                     f"SELECT chunk_id FROM chunks WHERE doc_id IN ({placeholders})",
                     doc_ids,
                 ).fetchall()
@@ -183,13 +186,16 @@ class WriterSQLitePool:
                 return 0
             cp = ",".join("?" * len(chunk_ids))
             conn.execute(
-                f"DELETE FROM chunks_fts WHERE chunk_id IN ({cp})", chunk_ids,
+                f"DELETE FROM chunks_fts WHERE chunk_id IN ({cp})",
+                chunk_ids,
             )
             conn.execute(
-                f"DELETE FROM chunk_closure WHERE descendant_id IN ({cp})", chunk_ids,
+                f"DELETE FROM chunk_closure WHERE descendant_id IN ({cp})",
+                chunk_ids,
             )
             conn.execute(
-                f"DELETE FROM chunk_embeddings WHERE chunk_id IN ({cp})", chunk_ids,
+                f"DELETE FROM chunk_embeddings WHERE chunk_id IN ({cp})",
+                chunk_ids,
             )
             conn.commit()
         return len(chunk_ids)
@@ -204,10 +210,16 @@ class WriterSQLitePool:
                 tags = c.metadata.get("tags", "")
                 if isinstance(tags, list):
                     tags = " ".join(tags)
-                rows.append((
-                    c.chunk_id, c.text, normalize_for_fts(c.text),
-                    title, normalize_for_fts(title), tags,
-                ))
+                rows.append(
+                    (
+                        c.chunk_id,
+                        c.text,
+                        normalize_for_fts(c.text),
+                        title,
+                        normalize_for_fts(title),
+                        tags,
+                    )
+                )
             conn.executemany(
                 "INSERT OR REPLACE INTO chunks_fts "
                 "(chunk_id, text, text_norm, title, title_norm, tags) "
@@ -219,13 +231,16 @@ class WriterSQLitePool:
     async def insert_closure_batch(self, relations: list[tuple[str, str, int]]) -> None:
         """Insert closure table entries: (ancestor_id, descendant_id, depth)."""
         async with self.write_conn() as conn:
-            conn.executemany(
-                "INSERT OR IGNORE INTO chunk_closure (ancestor_id, descendant_id, depth) VALUES (?, ?, ?)",
-                relations,
+            sql = (
+                "INSERT OR IGNORE INTO chunk_closure (ancestor_id, descendant_id, depth) "
+                "VALUES (?, ?, ?)"
             )
+            conn.executemany(sql, relations)
             conn.commit()
 
-    async def get_all_chunks_with_embeddings(self, space: str = "text") -> list[tuple[str, np.ndarray]]:
+    async def get_all_chunks_with_embeddings(
+        self, space: str = "text"
+    ) -> list[tuple[str, np.ndarray]]:
         """Read all (chunk_id, embedding) pairs for a given space."""
         async with self.read_conn() as conn:
             rows = conn.execute(
@@ -256,7 +271,8 @@ class WriterSQLitePool:
         """Delete a document and all its chunks. Returns chunks deleted."""
         async with self.write_conn() as conn:
             chunk_ids = [
-                r[0] for r in conn.execute(
+                r[0]
+                for r in conn.execute(
                     "SELECT chunk_id FROM chunks WHERE doc_id = ?", (doc_id,)
                 ).fetchall()
             ]

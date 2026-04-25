@@ -3,10 +3,8 @@
 Usage:
     python examples/hongloumeng/ingest.py [--writer-url http://localhost:8001] [--batch-size 5]
 """
+
 import argparse
-import json
-import os
-import re
 import sys
 import time
 from pathlib import Path
@@ -20,7 +18,7 @@ def extract_chapter_title(text: str, chapter_num: int) -> str:
     """Extract the chapter title line (e.g. '第一回　甄士隱夢幻識通靈...')."""
     for line in text.split("\n"):
         line = line.strip()
-        if line.startswith(f"第") and "回" in line[:10]:
+        if line.startswith("第") and "回" in line[:10]:
             return line
     return f"第{chapter_num}回"
 
@@ -44,8 +42,9 @@ def clean_text(text: str) -> str:
 def main():
     parser = argparse.ArgumentParser(description="Ingest 红楼梦 into EmbedRAG")
     parser.add_argument("--writer-url", default="http://localhost:8001")
-    parser.add_argument("--batch-size", type=int, default=5,
-                        help="Number of chapters per /ingest call")
+    parser.add_argument(
+        "--batch-size", type=int, default=5, help="Number of chapters per /ingest call"
+    )
     args = parser.parse_args()
 
     chapter_files = sorted(DATA_DIR.glob("chapter_*.txt"))
@@ -78,22 +77,24 @@ def main():
             text = clean_text(raw_text)
             title = extract_chapter_title(text, chapter_num)
 
-            documents.append({
-                "doc_id": f"hlm_ch{chapter_num:03d}",
-                "title": title,
-                "text": text,
-                "doc_type": "novel_chapter",
-                "chunking": "structured",
-                "source": "红楼梦",
-                "metadata": {
-                    "book": "红楼梦",
-                    "chapter": chapter_num,
-                    "author": "曹雪芹",
-                },
-            })
+            documents.append(
+                {
+                    "doc_id": f"hlm_ch{chapter_num:03d}",
+                    "title": title,
+                    "text": text,
+                    "doc_type": "novel_chapter",
+                    "chunking": "structured",
+                    "source": "红楼梦",
+                    "metadata": {
+                        "book": "红楼梦",
+                        "chapter": chapter_num,
+                        "author": "曹雪芹",
+                    },
+                }
+            )
 
         payload = {"documents": documents}
-        batch_desc = f"chapters {i+1}-{i+len(batch_files)}"
+        batch_desc = f"chapters {i + 1}-{i + len(batch_files)}"
         print(f"Ingesting {batch_desc}...", end=" ", flush=True)
 
         t_batch = time.time()
@@ -115,20 +116,20 @@ def main():
                 print(f"  Response: {e.response.text[:500]}")
 
     total_elapsed = time.time() - t_start
-    print(f"\n=== Ingestion Complete ===")
+    print("\n=== Ingestion Complete ===")
     print(f"  Documents: {total_ingested}")
     print(f"  Chunks:    {total_chunks}")
     print(f"  Time:      {total_elapsed:.1f}s")
 
     # Build index
-    print(f"\nBuilding FAISS index...", flush=True)
+    print("\nBuilding FAISS index...", flush=True)
     t_build = time.time()
     try:
         resp = requests.post(f"{args.writer_url}/build", json={}, timeout=600)
         resp.raise_for_status()
         result = resp.json()
         build_elapsed = time.time() - t_build
-        print(f"Build complete:")
+        print("Build complete:")
         print(f"  Version:  {result['version']}")
         print(f"  Docs:     {result['doc_count']}")
         print(f"  Chunks:   {result['chunk_count']}")

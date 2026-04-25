@@ -6,6 +6,7 @@ Usage:
     python examples/quantangshi/ingest.py [--writer-url http://localhost:8001] [--batch-size 50]
     python examples/quantangshi/ingest.py --input data/quantangshi_poems.jsonl
 """
+
 import argparse
 import json
 import sys
@@ -21,10 +22,10 @@ DEFAULT_INPUT = PROJECT_ROOT / "data" / "quantangshi_poems.jsonl"
 def main():
     parser = argparse.ArgumentParser(description="Ingest 全唐诗 into EmbedRAG")
     parser.add_argument("--writer-url", default="http://localhost:8001")
-    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT,
-                        help="JSONL file produced by download_poems.py")
-    parser.add_argument("--batch-size", type=int, default=50,
-                        help="Poems per /ingest call")
+    parser.add_argument(
+        "--input", type=Path, default=DEFAULT_INPUT, help="JSONL file produced by download_poems.py"
+    )
+    parser.add_argument("--batch-size", type=int, default=50, help="Poems per /ingest call")
     args = parser.parse_args()
 
     if not args.input.exists():
@@ -74,26 +75,12 @@ def main():
             if annotation:
                 full_text += f"\n\n【注】{annotation}"
 
-            documents.append({
-                "doc_id": doc_id,
-                "title": full_title,
-                "text": full_text,
-                "doc_type": "tang_poem",
-                "chunking": "plain",
-                "source": f"全唐诗·卷{vol:03d}",
-                "metadata": {
-                    "author": author,
-                    "volume": vol,
-                    "collection": "全唐诗",
-                },
-            })
-
-            if bio:
-                documents.append({
-                    "doc_id": f"qts_bio_{author[:10]}",
-                    "title": f"{author}（传记）",
-                    "text": bio,
-                    "doc_type": "author_bio",
+            documents.append(
+                {
+                    "doc_id": doc_id,
+                    "title": full_title,
+                    "text": full_text,
+                    "doc_type": "tang_poem",
                     "chunking": "plain",
                     "source": f"全唐诗·卷{vol:03d}",
                     "metadata": {
@@ -101,12 +88,30 @@ def main():
                         "volume": vol,
                         "collection": "全唐诗",
                     },
-                })
+                }
+            )
+
+            if bio:
+                documents.append(
+                    {
+                        "doc_id": f"qts_bio_{author[:10]}",
+                        "title": f"{author}（传记）",
+                        "text": bio,
+                        "doc_type": "author_bio",
+                        "chunking": "plain",
+                        "source": f"全唐诗·卷{vol:03d}",
+                        "metadata": {
+                            "author": author,
+                            "volume": vol,
+                            "collection": "全唐诗",
+                        },
+                    }
+                )
 
         if not documents:
             continue
 
-        desc = f"poems {i+1}-{i+len(batch)}"
+        desc = f"poems {i + 1}-{i + len(batch)}"
         if (i // args.batch_size) % 20 == 0 or i + args.batch_size >= len(poems):
             print(f"  Ingesting {desc}...", end=" ", flush=True)
 
@@ -123,29 +128,35 @@ def main():
             total_chunks += result["chunk_count"]
             elapsed = time.time() - t_batch
             if (i // args.batch_size) % 20 == 0 or i + args.batch_size >= len(poems):
-                print(f"OK ({result['ingested']} docs, {result['chunk_count']} chunks, {elapsed:.1f}s)")
+                msg = (
+                    f"OK ({result['ingested']} docs, "
+                    f"{result['chunk_count']} chunks, {elapsed:.1f}s)"
+                )
+                print(msg)
         except Exception as e:
             print(f"FAILED at {desc}: {e}")
             if hasattr(e, "response") and e.response is not None:
                 print(f"  Response: {e.response.text[:500]}")
 
     total_elapsed = time.time() - t_start
-    print(f"\n=== Ingestion Complete ===")
+    print("\n=== Ingestion Complete ===")
     print(f"  Documents: {total_ingested}")
     print(f"  Chunks:    {total_chunks}")
     print(f"  Time:      {total_elapsed:.1f}s")
 
-    print(f"\nBuilding index...", flush=True)
+    print("\nBuilding index...", flush=True)
     t_build = time.time()
     try:
         resp = requests.post(f"{args.writer_url}/build", json={}, timeout=600)
         resp.raise_for_status()
         result = resp.json()
         be = time.time() - t_build
-        print(f"Build complete: version={result['version']}, "
-              f"docs={result['doc_count']}, chunks={result['chunk_count']}, "
-              f"vectors={result['vector_count']}, shards={result['num_shards']}, "
-              f"time={be:.1f}s")
+        print(
+            f"Build complete: version={result['version']}, "
+            f"docs={result['doc_count']}, chunks={result['chunk_count']}, "
+            f"vectors={result['vector_count']}, shards={result['num_shards']}, "
+            f"time={be:.1f}s"
+        )
     except Exception as e:
         print(f"Build FAILED: {e}")
         if hasattr(e, "response") and e.response is not None:

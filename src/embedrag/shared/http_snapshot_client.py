@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Optional
 
 import httpx
 
@@ -36,7 +34,7 @@ class HttpSnapshotClient:
     def _url(self, path: str) -> str:
         return f"{self._base}/{path}"
 
-    def get_json(self, remote_path: str) -> Optional[dict]:
+    def get_json(self, remote_path: str) -> dict | None:
         url = self._url(remote_path)
         try:
             with httpx.Client(timeout=self._timeout, follow_redirects=True) as client:

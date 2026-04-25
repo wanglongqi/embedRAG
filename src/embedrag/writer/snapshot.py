@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from embedrag.logging_setup import get_logger
 from embedrag.models.manifest import (
@@ -37,7 +36,7 @@ class SnapshotPackager:
         doc_count: int,
         chunk_count: int,
         version: str,
-        previous_manifest: Optional[Manifest] = None,
+        previous_manifest: Manifest | None = None,
     ) -> Manifest:
         """Create a complete snapshot with compressed files and manifest.
 
@@ -63,18 +62,18 @@ class SnapshotPackager:
                 compressed_path = out / compressed_file
                 compressed_path.parent.mkdir(parents=True, exist_ok=True)
 
-                compressed_size = compress_file(
-                    raw_path, compressed_path, self._compression_level
+                compressed_size = compress_file(raw_path, compressed_path, self._compression_level)
+                shard_entries.append(
+                    ShardEntry(
+                        file=shard.file,
+                        compressed_file=compressed_file,
+                        sha256_raw=compute_sha256(raw_path),
+                        sha256_compressed=compute_sha256(compressed_path),
+                        raw_size=raw_path.stat().st_size,
+                        compressed_size=compressed_size,
+                        num_vectors=shard.num_vectors,
+                    )
                 )
-                shard_entries.append(ShardEntry(
-                    file=shard.file,
-                    compressed_file=compressed_file,
-                    sha256_raw=compute_sha256(raw_path),
-                    sha256_compressed=compute_sha256(compressed_path),
-                    raw_size=raw_path.stat().st_size,
-                    compressed_size=compressed_size,
-                    num_vectors=shard.num_vectors,
-                ))
                 total_raw += raw_path.stat().st_size
                 total_compressed += compressed_size
 
@@ -125,7 +124,7 @@ class SnapshotPackager:
         manifest = Manifest(
             manifest_version=3,
             snapshot_version=version,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             previous_version=previous_manifest.snapshot_version if previous_manifest else "",
             schema_version=3,
             indexes=all_indexes,
@@ -187,10 +186,13 @@ class SnapshotPublisher:
                 f"{version}/{idm.compressed_file}",
             )
 
-        self._client.put_json("latest.json", {
-            "version": version,
-            "published_at": datetime.now(timezone.utc).isoformat(),
-        })
+        self._client.put_json(
+            "latest.json",
+            {
+                "version": version,
+                "published_at": datetime.now(UTC).isoformat(),
+            },
+        )
 
         elapsed = time.monotonic() - t0
         logger.info(

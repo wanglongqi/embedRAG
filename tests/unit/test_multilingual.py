@@ -1,16 +1,18 @@
 """Multilingual tests: CJK, Arabic, Cyrillic, Thai, mixed-script content."""
 
+import sqlite3
+
+import pytest
+
+from embedrag.query.retrieval.sparse import SparseRetriever
 from embedrag.writer.chunking.splitter import (
     _count_tokens_approx,
     _split_text_by_size,
     _tokenize_multilingual,
     smart_split,
-    split_by_headings,
     split_by_paragraphs,
     split_document,
 )
-from embedrag.query.retrieval.sparse import SparseRetriever
-
 
 # ── Token counting ──
 
@@ -229,10 +231,6 @@ class TestFTSQueryBuilding:
 
 
 # ── End-to-end FTS5 trigram search ──
-
-
-import sqlite3
-import pytest
 
 
 class TestFTS5TrigramEndToEnd:

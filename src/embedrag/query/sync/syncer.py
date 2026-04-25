@@ -9,9 +9,8 @@ from __future__ import annotations
 import asyncio
 import shutil
 import time as _time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from embedrag.logging_setup import get_logger
 from embedrag.models.manifest import Manifest
@@ -25,6 +24,7 @@ logger = get_logger(__name__)
 @dataclass
 class SyncStatus:
     """Observable status exposed via the admin API."""
+
     last_check_at: float = 0
     last_sync_at: float = 0
     last_result: str = "none"
@@ -64,7 +64,7 @@ class SnapshotSyncer:
         self._cron_expr = cron_expr.strip()
         self._poll_interval = poll_interval
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self.status = SyncStatus()
 
     # ── lifecycle ──
@@ -109,18 +109,14 @@ class SnapshotSyncer:
             staging = Path(config.node.data_dir) / "staging"
             staging.mkdir(parents=True, exist_ok=True)
             manifest_path = staging / f"{new_version}_manifest.json"
-            self._client.download_file(
-                f"{new_version}/manifest.json", str(manifest_path)
-            )
+            self._client.download_file(f"{new_version}/manifest.json", str(manifest_path))
             new_manifest = Manifest.load(str(manifest_path))
 
             current_dir = None
             current_manifest = None
             if self._state.gen_manager.active:
                 current_manifest = self._state.gen_manager.active.manifest
-                current_dir = str(
-                    Path(config.node.data_dir) / "active" / current
-                )
+                current_dir = str(Path(config.node.data_dir) / "active" / current)
 
             snap_dir = await self._downloader.download_snapshot(
                 new_manifest, current_manifest, current_dir
@@ -133,7 +129,8 @@ class SnapshotSyncer:
                 return False
 
             ctx = load_generation(
-                snap_dir, new_manifest,
+                snap_dir,
+                new_manifest,
                 nprobe=config.index.nprobe,
                 use_mmap=config.index.mmap,
             )
@@ -144,9 +141,7 @@ class SnapshotSyncer:
                 shutil.rmtree(str(active))
             Path(snap_dir).rename(active)
 
-            self._cleanup_old_versions(
-                Path(config.node.data_dir) / "active", new_version, keep=2
-            )
+            self._cleanup_old_versions(Path(config.node.data_dir) / "active", new_version, keep=2)
 
             self.status.last_sync_at = _time.time()
             self.status.last_result = "synced"
@@ -180,6 +175,7 @@ class SnapshotSyncer:
         if self._cron_expr:
             try:
                 from croniter import croniter
+
                 cron = croniter(self._cron_expr)
                 return max(cron.get_next(float) - _time.time(), 1.0)
             except Exception:

@@ -1,6 +1,5 @@
 """Tests for configuration loading and validation."""
 
-import os
 from pathlib import Path
 
 import yaml
@@ -82,8 +81,9 @@ class TestEmbeddingConfig:
         assert cfg.embedding.model == "text-embedding-ada-002"
 
     def test_invalid_format_rejected(self):
-        from pydantic import ValidationError
         import pytest
+        from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             QueryNodeConfig(embedding={"api_format": "invalid"})
 

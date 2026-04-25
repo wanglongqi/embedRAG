@@ -2,13 +2,13 @@
 
 Supports two API formats:
 - "embedrag": POST {"texts": [...]} -> {"embeddings": [[...], ...]}
-- "openai":  POST {"input": [...], "model": "..."} -> {"data": [{"embedding": [...], "index": 0}, ...]}
+- "openai":  POST {"input": [...], "model": "..."}
+            -> {"data": [{"embedding": [...], "index": 0}, ...]}
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
 
 import aiohttp
 import numpy as np
@@ -34,7 +34,7 @@ class EmbeddingClient:
         self._batch_size = config.batch_size
         self._timeout = aiohttp.ClientTimeout(total=config.timeout_seconds)
         self._retry_count = config.retry_count
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -92,16 +92,11 @@ class EmbeddingClient:
 
         for attempt in range(self._retry_count):
             try:
-                async with session.post(
-                    self._url, json=payload, headers=headers
-                ) as resp:
+                async with session.post(self._url, json=payload, headers=headers) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
                     items = sorted(data["data"], key=lambda x: x["index"])
-                    return [
-                        np.array(item["embedding"], dtype=np.float32)
-                        for item in items
-                    ]
+                    return [np.array(item["embedding"], dtype=np.float32) for item in items]
             except Exception as e:
                 logger.warn(
                     "embedding_retry_openai",

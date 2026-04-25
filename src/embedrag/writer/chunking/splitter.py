@@ -10,9 +10,7 @@ Designed for multilingual content (100+ languages). Key design:
 from __future__ import annotations
 
 import re
-import unicodedata
 import uuid
-from typing import Optional
 
 from embedrag.models.chunk import ChunkNode
 
@@ -22,17 +20,17 @@ HEADING_PATTERN = re.compile(
 )
 
 _CJK_RANGES = (
-    (0x4E00, 0x9FFF),    # CJK Unified Ideographs
-    (0x3400, 0x4DBF),    # CJK Extension A
+    (0x4E00, 0x9FFF),  # CJK Unified Ideographs
+    (0x3400, 0x4DBF),  # CJK Extension A
     (0x20000, 0x2A6DF),  # CJK Extension B
     (0x2A700, 0x2B73F),  # CJK Extension C
     (0x2B740, 0x2B81F),  # CJK Extension D
-    (0xF900, 0xFAFF),    # CJK Compatibility Ideographs
-    (0x3000, 0x303F),    # CJK Symbols and Punctuation
-    (0x3040, 0x309F),    # Hiragana
-    (0x30A0, 0x30FF),    # Katakana
-    (0xAC00, 0xD7AF),    # Hangul Syllables
-    (0x1100, 0x11FF),    # Hangul Jamo
+    (0xF900, 0xFAFF),  # CJK Compatibility Ideographs
+    (0x3000, 0x303F),  # CJK Symbols and Punctuation
+    (0x3040, 0x309F),  # Hiragana
+    (0x30A0, 0x30FF),  # Katakana
+    (0xAC00, 0xD7AF),  # Hangul Syllables
+    (0x1100, 0x11FF),  # Hangul Jamo
 )
 
 _THAI_RANGE = (0x0E00, 0x0E7F)
@@ -138,21 +136,23 @@ def split_sliding_window(
     doc_id: str,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     overlap: int = DEFAULT_OVERLAP,
-    parent_chunk_id: Optional[str] = None,
+    parent_chunk_id: str | None = None,
 ) -> list[ChunkNode]:
     """Split long plain text using a sliding window with overlap.
 
     Also creates a parent node representing the full text.
     """
     if _count_tokens_approx(text) <= chunk_size:
-        return [ChunkNode(
-            chunk_id=_generate_chunk_id(),
-            doc_id=doc_id,
-            text=text,
-            parent_chunk_id=parent_chunk_id,
-            level=2 if parent_chunk_id else 0,
-            level_type="chunk",
-        )]
+        return [
+            ChunkNode(
+                chunk_id=_generate_chunk_id(),
+                doc_id=doc_id,
+                text=text,
+                parent_chunk_id=parent_chunk_id,
+                level=2 if parent_chunk_id else 0,
+                level_type="chunk",
+            )
+        ]
 
     if not parent_chunk_id:
         parent = ChunkNode(
@@ -169,15 +169,17 @@ def split_sliding_window(
 
     parts = _split_text_by_size(text, chunk_size, overlap)
     for seq, part in enumerate(parts):
-        chunks.append(ChunkNode(
-            chunk_id=_generate_chunk_id(),
-            doc_id=doc_id,
-            text=part,
-            parent_chunk_id=parent_chunk_id,
-            level=3,
-            level_type="chunk",
-            seq_in_parent=seq,
-        ))
+        chunks.append(
+            ChunkNode(
+                chunk_id=_generate_chunk_id(),
+                doc_id=doc_id,
+                text=part,
+                parent_chunk_id=parent_chunk_id,
+                level=3,
+                level_type="chunk",
+                seq_in_parent=seq,
+            )
+        )
 
     return chunks
 
@@ -195,13 +197,15 @@ def split_by_paragraphs(
     """
     raw_paras = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
     if not raw_paras:
-        return [ChunkNode(
-            chunk_id=_generate_chunk_id(),
-            doc_id=doc_id,
-            text=text,
-            level=0,
-            level_type="chunk",
-        )]
+        return [
+            ChunkNode(
+                chunk_id=_generate_chunk_id(),
+                doc_id=doc_id,
+                text=text,
+                level=0,
+                level_type="chunk",
+            )
+        ]
 
     merged: list[str] = []
     current = ""
@@ -216,24 +220,28 @@ def split_by_paragraphs(
         merged.append(current)
 
     if len(merged) == 1:
-        return [ChunkNode(
-            chunk_id=_generate_chunk_id(),
-            doc_id=doc_id,
-            text=merged[0],
-            level=0,
-            level_type="chunk",
-        )]
+        return [
+            ChunkNode(
+                chunk_id=_generate_chunk_id(),
+                doc_id=doc_id,
+                text=merged[0],
+                level=0,
+                level_type="chunk",
+            )
+        ]
 
     chunks: list[ChunkNode] = []
     for seq, para_text in enumerate(merged):
-        chunks.append(ChunkNode(
-            chunk_id=_generate_chunk_id(),
-            doc_id=doc_id,
-            text=para_text,
-            level=0,
-            level_type="chunk",
-            seq_in_parent=seq,
-        ))
+        chunks.append(
+            ChunkNode(
+                chunk_id=_generate_chunk_id(),
+                doc_id=doc_id,
+                text=para_text,
+                level=0,
+                level_type="chunk",
+                seq_in_parent=seq,
+            )
+        )
     return chunks
 
 
@@ -254,13 +262,15 @@ def smart_split(
 
     token_est = _count_tokens_approx(text)
     if token_est <= chunk_size:
-        return [ChunkNode(
-            chunk_id=_generate_chunk_id(),
-            doc_id=doc_id,
-            text=text,
-            level=0,
-            level_type="chunk",
-        )]
+        return [
+            ChunkNode(
+                chunk_id=_generate_chunk_id(),
+                doc_id=doc_id,
+                text=text,
+                level=0,
+                level_type="chunk",
+            )
+        ]
 
     return split_sliding_window(text, doc_id, chunk_size, overlap)
 

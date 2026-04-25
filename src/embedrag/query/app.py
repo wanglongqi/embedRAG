@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Optional
 
 from fastapi import FastAPI
 
@@ -30,7 +30,8 @@ class QueryState:
 
     def get_embedding_client(self, space: str = "text") -> EmbeddingClient:
         if space not in self.embedding_clients:
-            raise KeyError(f"No embedding client for space '{space}'. Available: {list(self.embedding_clients.keys())}")
+            available = list(self.embedding_clients.keys())
+            raise KeyError(f"No embedding client for space '{space}'. Available: {available}")
         return self.embedding_clients[space]
 
     async def close(self) -> None:
@@ -49,14 +50,16 @@ async def query_lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.query = state
 
     from embedrag.query.lifecycle.bootstrap import BootstrapError, bootstrap_query_node
+
     try:
         await bootstrap_query_node(state)
     except BootstrapError as exc:
         logger.critical("startup_aborted", reason=str(exc))
         import sys
-        print(f"\n{'='*60}", file=sys.stderr)
+
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print(f"STARTUP FAILED: {exc}", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         raise
 
     if not state.gen_manager.is_loaded:
@@ -66,43 +69,52 @@ async def query_lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Start background syncer if configured
     if config.sync.enabled:
-        from embedrag.query.sync.syncer import SnapshotSyncer
-        from embedrag.query.sync.downloader import SnapshotDownloader
         from pathlib import Path as _Path
+
+        from embedrag.query.sync.downloader import SnapshotDownloader
+        from embedrag.query.sync.syncer import SnapshotSyncer
 
         if config.sync.source == "http":
             if not config.sync.http_url:
                 logger.warn("sync_disabled_no_url", reason="sync.http_url is empty")
             else:
                 from embedrag.shared.http_snapshot_client import HttpSnapshotClient
+
                 client = HttpSnapshotClient(
                     config.sync.http_url,
                     timeout=config.sync.download_timeout_seconds,
                 )
                 staging = str(_Path(config.node.data_dir) / "staging")
                 downloader = SnapshotDownloader(
-                    client, staging,
+                    client,
+                    staging,
                     concurrency=config.sync.download_concurrency,
                     timeout=config.sync.download_timeout_seconds,
                 )
                 state.syncer = SnapshotSyncer(
-                    state, client, downloader,
+                    state,
+                    client,
+                    downloader,
                     cron_expr=config.sync.cron,
                     poll_interval=config.sync.poll_interval_seconds,
                 )
                 state.syncer.start()
         else:
             from embedrag.shared.object_store import ObjectStoreClient
+
             try:
                 client = ObjectStoreClient(config.object_store)
                 staging = str(_Path(config.node.data_dir) / "staging")
                 downloader = SnapshotDownloader(
-                    client, staging,
+                    client,
+                    staging,
                     concurrency=config.sync.download_concurrency,
                     timeout=config.sync.download_timeout_seconds,
                 )
                 state.syncer = SnapshotSyncer(
-                    state, client, downloader,
+                    state,
+                    client,
+                    downloader,
                     cron_expr=config.sync.cron,
                     poll_interval=config.sync.poll_interval_seconds,
                 )
@@ -117,16 +129,18 @@ async def query_lifespan(app: FastAPI) -> AsyncIterator[None]:
     if state.syncer:
         state.syncer.stop()
     from embedrag.query.lifecycle.shutdown import graceful_shutdown
+
     await graceful_shutdown(state)
     logger.info("query_stopped")
 
 
-def create_query_app(config_path: Optional[str] = None) -> FastAPI:
+def create_query_app(config_path: str | None = None) -> FastAPI:
     app = FastAPI(title="EmbedRAG Query", version="0.5.0", lifespan=query_lifespan)
     app.state.config_path = config_path
     app.add_middleware(RequestContextMiddleware)
 
     from starlette.middleware.cors import CORSMiddleware
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -135,11 +149,14 @@ def create_query_app(config_path: Optional[str] = None) -> FastAPI:
     )
 
     from embedrag.query.routes import router
+
     app.include_router(router)
 
     # Mount WebUI static files
     from pathlib import Path
+
     from fastapi.staticfiles import StaticFiles
+
     webui_dir = Path(__file__).parent.parent / "webui"
     if webui_dir.exists():
         app.mount("/ui", StaticFiles(directory=str(webui_dir), html=True), name="webui")

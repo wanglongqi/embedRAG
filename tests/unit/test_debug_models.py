@@ -124,20 +124,30 @@ class TestDebugSearchResponse:
             ],
             fused_results=[
                 DebugFusedHit(
-                    chunk_id="c-1", rrf_score=0.05,
-                    dense_score=0.92, sparse_score=-1.1,
-                    dense_rank=0, sparse_rank=0,
+                    chunk_id="c-1",
+                    rrf_score=0.05,
+                    dense_score=0.92,
+                    sparse_score=-1.1,
+                    dense_rank=0,
+                    sparse_rank=0,
                 ),
             ],
             final_chunks=[
                 ChunkResult(
-                    chunk_id="c-1", doc_id="d-1",
-                    text="RAG系统介绍...", score=0.05,
+                    chunk_id="c-1",
+                    doc_id="d-1",
+                    text="RAG系统介绍...",
+                    score=0.05,
                 ),
             ],
             timing=DebugTiming(
-                embedding_ms=12.5, dense_ms=2.1, sparse_ms=1.0,
-                fusion_ms=0.1, fetch_ms=0.5, expand_ms=0.2, total_ms=16.4,
+                embedding_ms=12.5,
+                dense_ms=2.1,
+                sparse_ms=1.0,
+                fusion_ms=0.1,
+                fetch_ms=0.5,
+                expand_ms=0.2,
+                total_ms=16.4,
             ),
             config_snapshot={"enable_sparse": True, "max_top_k": 100},
         )

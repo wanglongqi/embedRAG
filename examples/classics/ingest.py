@@ -6,6 +6,7 @@ Each source gets a distinct doc_type so they can be filtered at query time.
 Usage:
     python examples/classics/ingest.py [--writer-url http://localhost:8001]
 """
+
 import argparse
 import re
 import sys
@@ -38,7 +39,10 @@ SOURCES = [
 ]
 
 NOISE_LINES = {
-    "姊妹计划: 数据项", "註疏", "返回頁首", "Public domainPublic domainfalsefalse",
+    "姊妹计划: 数据项",
+    "註疏",
+    "返回頁首",
+    "Public domainPublic domainfalsefalse",
 }
 
 
@@ -110,23 +114,25 @@ def main():
             text = clean_text(raw)
             title = extract_title(text, src["title_pattern"], chapter_num, src["book"])
 
-            documents.append({
-                "doc_id": f"{src['doc_prefix']}_ch{chapter_num:03d}",
-                "title": title,
-                "text": text,
-                "doc_type": src["doc_type"],
-                "chunking": src["chunking"],
-                "source": src["book"],
-                "metadata": {
-                    "book": src["book"],
-                    "author": src["author"],
-                    "chapter": chapter_num,
-                },
-            })
+            documents.append(
+                {
+                    "doc_id": f"{src['doc_prefix']}_ch{chapter_num:03d}",
+                    "title": title,
+                    "text": text,
+                    "doc_type": src["doc_type"],
+                    "chunking": src["chunking"],
+                    "source": src["book"],
+                    "metadata": {
+                        "book": src["book"],
+                        "author": src["author"],
+                        "chapter": chapter_num,
+                    },
+                }
+            )
 
         for i in range(0, len(documents), args.batch_size):
             batch = documents[i : i + args.batch_size]
-            desc = f"{src['book']} {i+1}-{i+len(batch)}"
+            desc = f"{src['book']} {i + 1}-{i + len(batch)}"
             print(f"  Ingesting {desc}...", end=" ", flush=True)
             t = time.time()
             try:
@@ -137,25 +143,29 @@ def main():
                 r = resp.json()
                 total_docs += r["ingested"]
                 total_chunks += r["chunk_count"]
-                print(f"OK ({r['ingested']} docs, {r['chunk_count']} chunks, {time.time()-t:.1f}s)")
+                print(
+                    f"OK ({r['ingested']} docs, {r['chunk_count']} chunks, {time.time() - t:.1f}s)"
+                )
             except Exception as e:
                 print(f"FAILED: {e}")
 
     elapsed = time.time() - t_start
-    print(f"\n=== Ingestion Complete ===")
+    print("\n=== Ingestion Complete ===")
     print(f"  Documents: {total_docs}")
     print(f"  Chunks:    {total_chunks}")
     print(f"  Time:      {elapsed:.1f}s")
 
-    print(f"\nBuilding index...", flush=True)
+    print("\nBuilding index...", flush=True)
     t = time.time()
     try:
         resp = requests.post(f"{args.writer_url}/build", json={}, timeout=600)
         resp.raise_for_status()
         r = resp.json()
-        print(f"Build complete: version={r['version']}, docs={r['doc_count']}, "
-              f"chunks={r['chunk_count']}, vectors={r['vector_count']}, "
-              f"shards={r['num_shards']}, time={time.time()-t:.1f}s")
+        print(
+            f"Build complete: version={r['version']}, docs={r['doc_count']}, "
+            f"chunks={r['chunk_count']}, vectors={r['vector_count']}, "
+            f"shards={r['num_shards']}, time={time.time() - t:.1f}s"
+        )
     except Exception as e:
         print(f"Build FAILED: {e}")
 

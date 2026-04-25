@@ -85,9 +85,7 @@ class SchemaVersionError(RuntimeError):
 
 def get_schema_version(conn: sqlite3.Connection) -> int:
     try:
-        row = conn.execute(
-            "SELECT MAX(version) FROM schema_version"
-        ).fetchone()
+        row = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
         return row[0] if row and row[0] is not None else 0
     except sqlite3.OperationalError:
         return 0
@@ -182,10 +180,16 @@ def _rebuild_fts_with_norm(conn: sqlite3.Connection) -> None:
             tags = meta.get("tags", "")
             if isinstance(tags, list):
                 tags = " ".join(tags)
-            fts_rows.append((
-                r[0], text, normalize_for_fts(text),
-                title, normalize_for_fts(title), tags,
-            ))
+            fts_rows.append(
+                (
+                    r[0],
+                    text,
+                    normalize_for_fts(text),
+                    title,
+                    normalize_for_fts(title),
+                    tags,
+                )
+            )
         conn.executemany(
             "INSERT INTO chunks_fts (chunk_id, text, text_norm, title, title_norm, tags) "
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -207,8 +211,7 @@ def _add_chunk_embeddings(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_chunk_emb_space ON chunk_embeddings(space)")
 
     has_embedding_col = any(
-        r[1] == "embedding"
-        for r in conn.execute("PRAGMA table_info(chunks)").fetchall()
+        r[1] == "embedding" for r in conn.execute("PRAGMA table_info(chunks)").fetchall()
     )
     migrated = 0
     if has_embedding_col:

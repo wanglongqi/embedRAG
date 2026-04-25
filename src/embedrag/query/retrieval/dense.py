@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
@@ -84,7 +83,7 @@ class DenseRetriever:
         self,
         query_vector: np.ndarray,
         top_k: int,
-        deleted_ids: Optional[set[str]] = None,
+        deleted_ids: set[str] | None = None,
     ) -> tuple[list[DenseResult], float]:
         """Search dense index, filtering out deleted IDs.
 

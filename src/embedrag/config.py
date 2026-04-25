@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import socket
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
@@ -48,6 +48,7 @@ class SyncConfig(BaseModel):
     When ``enabled`` is True the query node polls the configured source for
     new snapshot versions and hot-swaps automatically.
     """
+
     enabled: bool = False
     source: Literal["object_store", "http"] = "object_store"
     http_url: str = ""
@@ -101,7 +102,7 @@ class NodeConfig(BaseModel):
     data_dir: str = "/data/embedrag"
 
     @model_validator(mode="after")
-    def _auto_node_id(self) -> "NodeConfig":
+    def _auto_node_id(self) -> NodeConfig:
         if self.node_id == "auto":
             self.node_id = socket.gethostname()
         return self
@@ -115,6 +116,7 @@ class DBConfig(BaseModel):
 
 class EmbeddingSpaceConfig(BaseModel):
     """Config for a single embedding space (e.g. 'text', 'image')."""
+
     service_url: str = "http://localhost:8080/embed"
     api_format: Literal["embedrag", "openai"] = "embedrag"
     api_key: str = ""
@@ -131,6 +133,7 @@ class EmbeddingConfig(BaseModel):
     a single "text" space.  When ``spaces`` is set, each key is a space
     name with its own ``EmbeddingSpaceConfig``.
     """
+
     service_url: str = "http://localhost:8080/embed"
     api_format: Literal["embedrag", "openai"] = "embedrag"
     api_key: str = ""
@@ -193,14 +196,12 @@ class WriterNodeConfig(BaseModel):
     db: DBConfig = Field(default_factory=DBConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     index_build: IndexBuildConfig = Field(default_factory=IndexBuildConfig)
-    server: ServerConfig = Field(
-        default_factory=lambda: ServerConfig(port=8001)
-    )
+    server: ServerConfig = Field(default_factory=lambda: ServerConfig(port=8001))
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
 
     @model_validator(mode="after")
-    def _resolve_db_path(self) -> "WriterNodeConfig":
+    def _resolve_db_path(self) -> WriterNodeConfig:
         if not self.db.path:
             self.db.path = str(Path(self.node.data_dir) / "db" / "writer.db")
         return self
@@ -217,7 +218,7 @@ def load_config(path: str | Path) -> QueryNodeConfig | WriterNodeConfig:
     return QueryNodeConfig(**raw)
 
 
-def load_query_config(path: Optional[str | Path] = None) -> QueryNodeConfig:
+def load_query_config(path: str | Path | None = None) -> QueryNodeConfig:
     if path is None:
         return QueryNodeConfig()
     with open(path) as f:
@@ -225,7 +226,7 @@ def load_query_config(path: Optional[str | Path] = None) -> QueryNodeConfig:
     return QueryNodeConfig(**raw)
 
 
-def load_writer_config(path: Optional[str | Path] = None) -> WriterNodeConfig:
+def load_writer_config(path: str | Path | None = None) -> WriterNodeConfig:
     if path is None:
         return WriterNodeConfig()
     with open(path) as f:

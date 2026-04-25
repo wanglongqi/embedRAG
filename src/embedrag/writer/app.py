@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import tempfile
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 
@@ -39,7 +38,8 @@ class WriterState:
     def get_embedding_client(self, space: str = "text") -> EmbeddingClient:
         if space in self.embedding_clients:
             return self.embedding_clients[space]
-        raise KeyError(f"No embedding client for space '{space}'. Available: {list(self.embedding_clients.keys())}")
+        available = list(self.embedding_clients.keys())
+        raise KeyError(f"No embedding client for space '{space}'. Available: {available}")
 
     @property
     def last_manifest(self):
@@ -73,5 +73,6 @@ def create_writer_app(config_path: str | None = None) -> FastAPI:
     app.state.config_path = config_path
 
     from embedrag.writer.routes import router
+
     app.include_router(router)
     return app

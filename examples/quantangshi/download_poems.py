@@ -3,8 +3,10 @@
 Each poem becomes a JSON object with: author, title, text, volume, annotation.
 
 Usage:
-    python examples/quantangshi/download_poems.py [--start 1] [--end 900] [--output data/quantangshi_poems.jsonl]
+    python examples/quantangshi/download_poems.py \
+        [--start 1] [--end 900] [--output data/quantangshi_poems.jsonl]
 """
+
 import argparse
 import json
 import re
@@ -14,20 +16,27 @@ import urllib.request
 from pathlib import Path
 
 # Biography keywords that typically appear in author bio paragraphs
-_BIO_MARKERS = re.compile(r"(字[^\s，]{1,4}|號[^\s，]{1,6}|人\s*[。，]|詩\s*\d+\s*首|"
-                          r"貞觀|開元|天寶|大曆|元和|長慶|會昌)")
+_BIO_MARKERS = re.compile(
+    r"(字[^\s，]{1,4}|號[^\s，]{1,6}|人\s*[。，]|詩\s*\d+\s*首|"
+    r"貞觀|開元|天寶|大曆|元和|長慶|會昌)"
+)
 
 NOISE = {
-    "返回頁首", "上一卷", "下一卷", "全唐詩", "姊妹计划: 数据项", "目录",
+    "返回頁首",
+    "上一卷",
+    "下一卷",
+    "全唐詩",
+    "姊妹计划: 数据项",
+    "目录",
 }
 
 
 def fetch_volume_html(vol_num: int) -> str:
     encoded_vol = urllib.parse.quote(f"卷{vol_num:03d}")
     url = f"https://zh.wikisource.org/wiki/%E5%85%A8%E5%94%90%E8%A9%A9/{encoded_vol}"
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (compatible; miniRAG-QTS/1.0)"
-    })
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "Mozilla/5.0 (compatible; miniRAG-QTS/1.0)"}
+    )
     with urllib.request.urlopen(req, timeout=30) as resp:
         return resp.read().decode("utf-8")
 
@@ -74,11 +83,11 @@ def _clean_lines(raw_html: str) -> list[str]:
     """Strip HTML, remove noise, remove [编辑] artifacts."""
     text = strip_html(raw_html)
     lines = []
-    for l in text.split("\n"):
-        l = l.strip()
-        l = l.replace("[编辑]", "").strip()
-        if l and not is_noise(l):
-            lines.append(l)
+    for line in text.split("\n"):
+        line = line.strip()
+        line = line.replace("[编辑]", "").strip()
+        if line and not is_noise(line):
+            lines.append(line)
     return lines
 
 
@@ -142,10 +151,13 @@ def parse_volume(html: str, vol_num: int) -> list[dict]:
         if m:
             candidate = m.group(1).strip()
             # Exclude volume navigation artifacts
-            if (candidate and len(candidate) <= 15
-                    and not candidate.startswith("全唐詩")
-                    and not candidate.startswith("卷")
-                    and "→" not in candidate):
+            if (
+                candidate
+                and len(candidate) <= 15
+                and not candidate.startswith("全唐詩")
+                and not candidate.startswith("卷")
+                and "→" not in candidate
+            ):
                 default_author = candidate
 
     # Two-pass: first classify h2 headings, then extract poems
@@ -201,14 +213,16 @@ def parse_volume(html: str, vol_num: int) -> list[dict]:
         poem_text = "\n".join(lines[start:])
 
         if poem_text.strip():
-            poems.append({
-                "author": current_author,
-                "title": current_title,
-                "text": poem_text.strip(),
-                "volume": vol_num,
-                "annotation": annotation,
-                "author_bio": bio,
-            })
+            poems.append(
+                {
+                    "author": current_author,
+                    "title": current_title,
+                    "text": poem_text.strip(),
+                    "volume": vol_num,
+                    "annotation": annotation,
+                    "author_bio": bio,
+                }
+            )
 
     for stype, heading, content_html in sections:
         if stype == "author":
@@ -233,8 +247,7 @@ def main():
     parser.add_argument("--start", type=int, default=1)
     parser.add_argument("--end", type=int, default=900)
     parser.add_argument("--output", default="data/quantangshi_poems.jsonl")
-    parser.add_argument("--delay", type=float, default=0.3,
-                        help="Delay between requests (seconds)")
+    parser.add_argument("--delay", type=float, default=0.3, help="Delay between requests (seconds)")
     args = parser.parse_args()
 
     output = Path(args.output)
@@ -259,7 +272,7 @@ def main():
                 failed += 1
                 time.sleep(1)
 
-    print(f"\n=== Download Complete ===")
+    print("\n=== Download Complete ===")
     print(f"  Volumes: {args.start}-{args.end}")
     print(f"  Total poems: {total_poems}")
     print(f"  Failed volumes: {failed}")

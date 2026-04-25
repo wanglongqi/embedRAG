@@ -20,7 +20,7 @@ async def graceful_shutdown(state) -> None:
             _wait_for_drain(state),
             timeout=drain_seconds,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warn("shutdown_drain_timeout", seconds=drain_seconds)
 
     await state.gen_manager.close()

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 import boto3
 from botocore.config import Config as BotoConfig
@@ -55,7 +54,7 @@ class ObjectStoreClient:
         body = json.dumps(data, indent=2).encode()
         self._client.put_object(Bucket=self._bucket, Key=key, Body=body)
 
-    def get_json(self, remote_path: str) -> Optional[dict]:
+    def get_json(self, remote_path: str) -> dict | None:
         key = self._key(remote_path)
         try:
             resp = self._client.get_object(Bucket=self._bucket, Key=key)
@@ -63,7 +62,7 @@ class ObjectStoreClient:
         except self._client.exceptions.NoSuchKey:
             return None
 
-    def head_object(self, remote_path: str) -> Optional[dict]:
+    def head_object(self, remote_path: str) -> dict | None:
         key = self._key(remote_path)
         try:
             return self._client.head_object(Bucket=self._bucket, Key=key)

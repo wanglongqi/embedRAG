@@ -1,9 +1,5 @@
 """Tests for manifest v3 serialization and delta detection."""
 
-import json
-import tempfile
-from pathlib import Path
-
 from embedrag.models.manifest import DeltaInfo, FileEntry, IndexInfo, Manifest, ShardEntry
 
 

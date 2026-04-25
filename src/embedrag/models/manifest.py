@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
@@ -33,6 +32,7 @@ class IndexInfo:
 @dataclass
 class FileEntry:
     """A single file in the snapshot (db or id_map)."""
+
     file: str
     compressed_file: str = ""
     sha256_raw: str = ""
@@ -68,7 +68,7 @@ class Manifest:
     total_raw_size: int = 0
     total_compressed_size: int = 0
 
-    delta: Optional[DeltaInfo] = None
+    delta: DeltaInfo | None = None
 
     @property
     def spaces(self) -> list[str]:
@@ -85,7 +85,7 @@ class Manifest:
             files.append(idm.compressed_file or idm.file)
         return files
 
-    def get_file_entry_by_compressed(self, compressed_path: str) -> Optional[FileEntry | ShardEntry]:
+    def get_file_entry_by_compressed(self, compressed_path: str) -> FileEntry | ShardEntry | None:
         for idx_info in self.indexes.values():
             for shard in idx_info.shards:
                 if (shard.compressed_file or shard.file) == compressed_path:
@@ -103,13 +103,13 @@ class Manifest:
             json.dump(self.to_dict(), f, indent=2)
 
     @classmethod
-    def load(cls, path: str | Path) -> "Manifest":
+    def load(cls, path: str | Path) -> Manifest:
         with open(path) as f:
             data = json.load(f)
         return cls.from_dict(data)
 
     @classmethod
-    def from_json(cls, raw: str) -> "Manifest":
+    def from_json(cls, raw: str) -> Manifest:
         return cls.from_dict(json.loads(raw))
 
     def to_json(self) -> str:
@@ -179,7 +179,7 @@ class Manifest:
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Manifest":
+    def from_dict(cls, data: dict) -> Manifest:
         def _parse_index(d: dict) -> IndexInfo:
             shards = [ShardEntry(**s) for s in d.get("shards", [])]
             return IndexInfo(
@@ -204,10 +204,9 @@ class Manifest:
                 chunk_count=d.get("chunk_count", 0),
             )
 
-        indexes = {
-            space: _parse_index(d)
-            for space, d in data.get("indexes", {}).items()
-        } or {"text": IndexInfo()}
+        indexes = {space: _parse_index(d) for space, d in data.get("indexes", {}).items()} or {
+            "text": IndexInfo()
+        }
 
         id_maps = {
             space: _parse_file_entry(d, f"index/{space}/id_map.msgpack")

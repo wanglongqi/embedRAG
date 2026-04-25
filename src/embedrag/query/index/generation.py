@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
-from typing import AsyncIterator, Optional
+from dataclasses import dataclass
 
 from embedrag.logging_setup import get_logger
 from embedrag.models.manifest import Manifest
@@ -23,6 +23,7 @@ class GenerationContext:
     Supports multiple embedding spaces: ``shard_managers`` and ``hotfix_buffers``
     are dicts keyed by space name.
     """
+
     version: str
     shard_managers: dict[str, ShardManager]
     db_pool: ReadOnlySQLitePool
@@ -57,7 +58,7 @@ class GenerationManager:
     """Manages active/standby generations with ref-counted atomic swap."""
 
     def __init__(self) -> None:
-        self._active: Optional[GenerationContext] = None
+        self._active: GenerationContext | None = None
         self._ref_count: int = 0
         self._lock = asyncio.Lock()
         self._drain_event = asyncio.Event()
@@ -72,7 +73,7 @@ class GenerationManager:
         return self._active is not None
 
     @property
-    def active(self) -> Optional[GenerationContext]:
+    def active(self) -> GenerationContext | None:
         return self._active
 
     @asynccontextmanager

@@ -12,7 +12,7 @@ import numpy as np
 
 from embedrag.config import IndexBuildConfig
 from embedrag.logging_setup import get_logger
-from embedrag.models.manifest import IndexInfo, Manifest, ShardEntry
+from embedrag.models.manifest import IndexInfo, ShardEntry
 
 logger = get_logger(__name__)
 
@@ -79,11 +79,13 @@ class IndexBuilder:
                 global_id_map[global_offset + local_idx] = cid
             global_offset += len(shard_ids)
 
-            shard_entries.append(ShardEntry(
-                file=f"index/{space}/{shard_file}",
-                raw_size=shard_path.stat().st_size,
-                num_vectors=len(shard_ids),
-            ))
+            shard_entries.append(
+                ShardEntry(
+                    file=f"index/{space}/{shard_file}",
+                    raw_size=shard_path.stat().st_size,
+                    num_vectors=len(shard_ids),
+                )
+            )
             logger.info(
                 "shard_built",
                 space=space,
@@ -98,7 +100,9 @@ class IndexBuilder:
             msgpack.pack(str_id_map, f)
 
         elapsed = time.monotonic() - t0
-        logger.info("index_build_done", space=space, elapsed_s=round(elapsed, 1), shards=len(shard_entries))
+        logger.info(
+            "index_build_done", space=space, elapsed_s=round(elapsed, 1), shards=len(shard_entries)
+        )
 
         index_info = IndexInfo(
             type=index_type,

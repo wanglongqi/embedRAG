@@ -1,13 +1,12 @@
 """Tests for snapshot packaging: compression, checksum, delta detection."""
 
-import os
 from pathlib import Path
 
 import faiss
 import msgpack
 import numpy as np
 
-from embedrag.models.manifest import FileEntry, IndexInfo, Manifest, ShardEntry
+from embedrag.models.manifest import IndexInfo, ShardEntry
 from embedrag.shared.checksum import compute_sha256
 from embedrag.writer.snapshot import SnapshotPackager
 
@@ -37,6 +36,7 @@ def _create_test_files(tmp_path: Path) -> tuple[str, dict[str, IndexInfo], dict[
         msgpack.pack(id_map, f)
 
     import sqlite3
+
     db_path = str(db_dir / "embedrag.db")
     conn = sqlite3.connect(db_path)
     conn.execute("CREATE TABLE chunks (id TEXT)")
@@ -51,7 +51,13 @@ def _create_test_files(tmp_path: Path) -> tuple[str, dict[str, IndexInfo], dict[
             dim=dim,
             num_shards=1,
             total_vectors=n,
-            shards=[ShardEntry(file="index/text/shard_0.faiss", raw_size=shard_path.stat().st_size, num_vectors=n)],
+            shards=[
+                ShardEntry(
+                    file="index/text/shard_0.faiss",
+                    raw_size=shard_path.stat().st_size,
+                    num_vectors=n,
+                )
+            ],
         ),
     }
     space_id_map_paths = {"text": id_map_path}
@@ -115,16 +121,26 @@ class TestSnapshotPackager:
         out1 = str(tmp_path / "snap_v001")
         packager = SnapshotPackager()
         m1 = packager.package(
-            build_dir=build_dir, output_dir=out1,
-            space_index_infos=space_index_infos, space_id_map_paths=space_id_map_paths,
-            db_path=db_path, doc_count=10, chunk_count=100, version="v001",
+            build_dir=build_dir,
+            output_dir=out1,
+            space_index_infos=space_index_infos,
+            space_id_map_paths=space_id_map_paths,
+            db_path=db_path,
+            doc_count=10,
+            chunk_count=100,
+            version="v001",
         )
 
         out2 = str(tmp_path / "snap_v002")
         m2 = packager.package(
-            build_dir=build_dir, output_dir=out2,
-            space_index_infos=space_index_infos, space_id_map_paths=space_id_map_paths,
-            db_path=db_path, doc_count=10, chunk_count=100, version="v002",
+            build_dir=build_dir,
+            output_dir=out2,
+            space_index_infos=space_index_infos,
+            space_id_map_paths=space_id_map_paths,
+            db_path=db_path,
+            doc_count=10,
+            chunk_count=100,
+            version="v002",
             previous_manifest=m1,
         )
 

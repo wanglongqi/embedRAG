@@ -1,8 +1,8 @@
 """Tests for FAISS index builder."""
 
-import numpy as np
 import faiss
 import msgpack
+import numpy as np
 
 from embedrag.config import IndexBuildConfig
 from embedrag.writer.index_builder import IndexBuilder

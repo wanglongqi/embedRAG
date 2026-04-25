@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import BaseModel, Field
-
 
 # ── Writer API models ──
 
@@ -17,8 +14,8 @@ class DocumentInput(BaseModel):
     source: str = ""
     doc_type: str = ""
     chunking: str = "auto"
-    chunk_size: Optional[int] = None
-    chunk_overlap: Optional[int] = None
+    chunk_size: int | None = None
+    chunk_overlap: int | None = None
     metadata: dict = Field(default_factory=dict)
     modality: str = "text"
     content_ref: str = ""
@@ -83,9 +80,9 @@ class RerankResponse(BaseModel):
 
 class SearchRequest(BaseModel):
     query_embedding: list[float]
-    query_text: Optional[str] = None
+    query_text: str | None = None
     top_k: int = 10
-    filters: Optional[dict] = None
+    filters: dict | None = None
     expand_context: bool = True
     context_depth: int = 1
     space: str = "text"
@@ -94,7 +91,7 @@ class SearchRequest(BaseModel):
 class TextSearchRequest(BaseModel):
     query_text: str
     top_k: int = 10
-    filters: Optional[dict] = None
+    filters: dict | None = None
     expand_context: bool = True
     context_depth: int = 1
     mode: str = "hybrid"
@@ -109,7 +106,7 @@ class ChunkResult(BaseModel):
     level: int = 0
     level_type: str = "chunk"
     metadata: dict = Field(default_factory=dict)
-    parent_text: Optional[str] = None
+    parent_text: str | None = None
 
 
 class SearchResponse(BaseModel):
@@ -159,18 +156,20 @@ class ReadinessResponse(BaseModel):
 
 class SpaceQuery(BaseModel):
     """Query for a single embedding space."""
+
     space: str
     query_embedding: list[float]
-    query_text: Optional[str] = None
+    query_text: str | None = None
     weight: float = 1.0
 
 
 class MultiSpaceSearchRequest(BaseModel):
     """Search multiple spaces and fuse results via late fusion."""
+
     queries: list[SpaceQuery]
     top_k: int = 10
     fusion: str = "rrf"
-    filters: Optional[dict] = None
+    filters: dict | None = None
     expand_context: bool = True
     context_depth: int = 1
 
@@ -213,7 +212,7 @@ class SyncTriggerRequest(BaseModel):
 class DebugSearchRequest(BaseModel):
     query_text: str
     top_k: int = 10
-    filters: Optional[dict] = None
+    filters: dict | None = None
     expand_context: bool = True
     context_depth: int = 1
     mode: str = "hybrid"

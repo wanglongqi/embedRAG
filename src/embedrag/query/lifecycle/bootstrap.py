@@ -44,7 +44,8 @@ async def bootstrap_query_node(state) -> None:
         if quick_verify_snapshot(snap_dir, manifest):
             logger.info("bootstrap_local", version=manifest.snapshot_version)
             ctx = load_generation(
-                snap_dir, manifest,
+                snap_dir,
+                manifest,
                 nprobe=config.index.nprobe,
                 use_mmap=config.index.mmap,
             )
@@ -81,11 +82,13 @@ async def bootstrap_query_node(state) -> None:
         target = active_dir / version
         if target.exists():
             import shutil
+
             shutil.rmtree(str(target))
         Path(snap_dir).rename(target)
 
         ctx = load_generation(
-            str(target), manifest,
+            str(target),
+            manifest,
             nprobe=config.index.nprobe,
             use_mmap=config.index.mmap,
         )
@@ -120,7 +123,9 @@ def _resolve_version(client: ObjectStoreClient, bootstrap_version: str) -> str |
     return bootstrap_version
 
 
-async def _download_snapshot(client: ObjectStoreClient, version: str, snap_dir: str, config) -> None:
+async def _download_snapshot(
+    client: ObjectStoreClient, version: str, snap_dir: str, config
+) -> None:
     """Download a full snapshot from object store."""
     Path(snap_dir).mkdir(parents=True, exist_ok=True)
 
@@ -132,9 +137,7 @@ async def _download_snapshot(client: ObjectStoreClient, version: str, snap_dir: 
     needed = manifest.total_compressed_size + manifest.total_raw_size
     ok, available = check_disk_space(snap_dir, needed, config.snapshot.disk_reserve_bytes)
     if not ok:
-        raise RuntimeError(
-            f"Insufficient disk: need {needed} + reserve, have {available}"
-        )
+        raise RuntimeError(f"Insufficient disk: need {needed} + reserve, have {available}")
 
     # Download all compressed files (per-space shards + id_maps)
     for idx_info in manifest.indexes.values():

@@ -1,8 +1,5 @@
 """Tests for generation manager: atomic swap, ref counting, drain."""
 
-import asyncio
-
-import numpy as np
 import pytest
 
 from embedrag.models.manifest import IndexInfo, Manifest

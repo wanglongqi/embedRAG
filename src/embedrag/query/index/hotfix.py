@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
-from typing import Optional
 
 import faiss
 import numpy as np
@@ -72,16 +71,16 @@ class HotfixBuffer:
             return []
         q = query.reshape(1, -1).astype(np.float32)
         k = min(top_k, self._index.ntotal)
-        D, I = self._index.search(q, k)
+        distances, indices = self._index.search(q, k)
         results = []
-        for score, pos in zip(D[0], I[0]):
+        for score, pos in zip(distances[0], indices[0]):
             if pos >= 0 and pos in self._pos_to_id:
                 cid = self._pos_to_id[pos]
                 if cid not in self._deleted_ids:
                     results.append((cid, float(score)))
         return results
 
-    def get_chunk(self, chunk_id: str) -> Optional[ChunkResult]:
+    def get_chunk(self, chunk_id: str) -> ChunkResult | None:
         data = self._chunks.get(chunk_id)
         if not data:
             return None

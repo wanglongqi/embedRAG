@@ -40,10 +40,12 @@ def main() -> None:
 
     if args.command == "writer":
         from embedrag.writer.app import create_writer_app
+
         app = create_writer_app(config_path=args.config)
         uvicorn.run(app, host=args.host, port=args.port)
     elif args.command == "query":
         from embedrag.query.app import create_query_app
+
         app = create_query_app(config_path=args.config)
         uvicorn.run(app, host=args.host, port=args.port)
 
@@ -55,7 +57,6 @@ def _run_migrate(path: str, dry_run: bool = False) -> None:
     a direct path to a embedrag.db file.
     """
     import json
-    import os
     import shutil
     import sqlite3
     from pathlib import Path
@@ -101,7 +102,10 @@ def _run_migrate(path: str, dry_run: bool = False) -> None:
             manifest_data = json.load(f)
         manifest_version = manifest_data.get("manifest_version", 0)
         needs_manifest_upgrade = "index" in manifest_data and "indexes" not in manifest_data
-        print(f"Manifest:     v{manifest_version}" + (" (needs v3 upgrade)" if needs_manifest_upgrade else " (ok)"))
+        print(
+            f"Manifest:     v{manifest_version}"
+            + (" (needs v3 upgrade)" if needs_manifest_upgrade else " (ok)")
+        )
     else:
         needs_manifest_upgrade = False
         print(f"Manifest:     not found at {manifest_path}")
@@ -117,7 +121,9 @@ def _run_migrate(path: str, dry_run: bool = False) -> None:
         if db_needs_upgrade:
             print(f"  - Migrate DB schema v{db_version} -> v{CURRENT_SCHEMA_VERSION}")
         if needs_manifest_upgrade:
-            print(f"  - Convert manifest v{manifest_version} -> v3 (index->indexes, id_map->id_maps)")
+            print(
+                f"  - Convert manifest v{manifest_version} -> v3 (index->indexes, id_map->id_maps)"
+            )
         return
 
     # ── Perform migration ──
@@ -132,7 +138,7 @@ def _run_migrate(path: str, dry_run: bool = False) -> None:
             initialize_schema(conn)
             conn.execute("VACUUM")
             conn.close()
-            print(f"DB migration complete.")
+            print("DB migration complete.")
         except Exception as e:
             conn.close()
             print(f"DB migration FAILED: {e}")

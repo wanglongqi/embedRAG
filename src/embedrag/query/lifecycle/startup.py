@@ -92,7 +92,9 @@ def load_generation(
 
     # Open read-only SQLite and verify schema version
     import sqlite3
+
     from embedrag.writer.schema import check_schema_version
+
     check_conn = sqlite3.connect(f"file:{db_raw}?mode=ro", uri=True)
     try:
         check_schema_version(check_conn)

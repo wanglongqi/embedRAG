@@ -5,12 +5,10 @@ from __future__ import annotations
 import asyncio
 import shutil
 from pathlib import Path
-from typing import Optional
 
 from embedrag.logging_setup import get_logger
-from embedrag.models.manifest import DeltaInfo, FileEntry, Manifest, ShardEntry
-from embedrag.shared.checksum import StreamingHasher, compute_sha256
-from embedrag.shared.compression import decompress_file
+from embedrag.models.manifest import FileEntry, Manifest, ShardEntry
+from embedrag.shared.checksum import compute_sha256
 from embedrag.shared.disk import check_disk_space, preallocate_file
 from embedrag.shared.snapshot_client import SnapshotClient
 
@@ -39,8 +37,8 @@ class SnapshotDownloader:
     async def download_snapshot(
         self,
         new_manifest: Manifest,
-        current_manifest: Optional[Manifest] = None,
-        current_snapshot_dir: Optional[str] = None,
+        current_manifest: Manifest | None = None,
+        current_snapshot_dir: str | None = None,
     ) -> str:
         """Download a new snapshot, reusing files from the current snapshot if delta is available.
 
@@ -80,10 +78,7 @@ class SnapshotDownloader:
         )
 
         # Download with concurrency control
-        tasks = [
-            self._download_one(version, f, target, new_manifest)
-            for f in download_files
-        ]
+        tasks = [self._download_one(version, f, target, new_manifest) for f in download_files]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for f, r in zip(download_files, results):
             if isinstance(r, Exception):
@@ -116,7 +111,7 @@ class SnapshotDownloader:
                     logger.info("download_ok", file=file_path, attempt=attempt + 1)
                     return
                 except Exception as e:
-                    wait = RETRY_BACKOFF_BASE ** attempt
+                    wait = RETRY_BACKOFF_BASE**attempt
                     logger.warn(
                         "download_retry",
                         file=file_path,
@@ -129,7 +124,7 @@ class SnapshotDownloader:
                     else:
                         raise
 
-    def _verify_download(self, local_path: str, entry: Optional[FileEntry | ShardEntry]) -> bool:
+    def _verify_download(self, local_path: str, entry: FileEntry | ShardEntry | None) -> bool:
         if not entry:
             return True
         expected_hash = ""
@@ -143,7 +138,7 @@ class SnapshotDownloader:
         return actual == expected_hash
 
 
-def _get_expected_size(entry: Optional[FileEntry | ShardEntry]) -> int:
+def _get_expected_size(entry: FileEntry | ShardEntry | None) -> int:
     if not entry:
         return 0
     return entry.compressed_size or entry.raw_size

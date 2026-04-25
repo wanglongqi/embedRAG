@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import numpy as np
 import pytest
 
@@ -128,14 +125,16 @@ class TestOpenAIFormat:
     @pytest.mark.asyncio
     async def test_single_batch(self, openai_config):
         client = EmbeddingClient(openai_config)
-        fake_resp = _FakeResponse({
-            "data": [
-                {"embedding": [0.5, 0.6], "index": 0},
-                {"embedding": [0.7, 0.8], "index": 1},
-            ],
-            "model": "text-embedding-3-large",
-            "usage": {"prompt_tokens": 10, "total_tokens": 10},
-        })
+        fake_resp = _FakeResponse(
+            {
+                "data": [
+                    {"embedding": [0.5, 0.6], "index": 0},
+                    {"embedding": [0.7, 0.8], "index": 1},
+                ],
+                "model": "text-embedding-3-large",
+                "usage": {"prompt_tokens": 10, "total_tokens": 10},
+            }
+        )
         fake_session = _FakeSession(fake_resp)
         client._session = fake_session
 
@@ -156,12 +155,14 @@ class TestOpenAIFormat:
     async def test_index_reordering(self, openai_config):
         """OpenAI may return items out of order; client should sort by index."""
         client = EmbeddingClient(openai_config)
-        fake_resp = _FakeResponse({
-            "data": [
-                {"embedding": [0.9, 0.9], "index": 1},
-                {"embedding": [0.1, 0.1], "index": 0},
-            ],
-        })
+        fake_resp = _FakeResponse(
+            {
+                "data": [
+                    {"embedding": [0.9, 0.9], "index": 1},
+                    {"embedding": [0.1, 0.1], "index": 0},
+                ],
+            }
+        )
         client._session = _FakeSession(fake_resp)
 
         result = await client.embed_texts(["first", "second"])
@@ -178,9 +179,11 @@ class TestOpenAIFormat:
             retry_count=1,
         )
         client = EmbeddingClient(config)
-        fake_resp = _FakeResponse({
-            "data": [{"embedding": [1.0], "index": 0}],
-        })
+        fake_resp = _FakeResponse(
+            {
+                "data": [{"embedding": [1.0], "index": 0}],
+            }
+        )
         fake_session = _FakeSession(fake_resp)
         client._session = fake_session
 
@@ -196,9 +199,11 @@ class TestOpenAIFormat:
             retry_count=1,
         )
         client = EmbeddingClient(config)
-        fake_resp = _FakeResponse({
-            "data": [{"embedding": [1.0], "index": 0}],
-        })
+        fake_resp = _FakeResponse(
+            {
+                "data": [{"embedding": [1.0], "index": 0}],
+            }
+        )
         session = _FakeSession(fake_resp)
         client._session = session
 

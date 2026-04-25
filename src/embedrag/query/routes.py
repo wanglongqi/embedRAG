@@ -108,12 +108,14 @@ async def _run_search_pipeline(
 
         if mode != "sparse":
             from embedrag.query.retrieval.dense import DenseRetriever
+
             dense_retriever = DenseRetriever(shard_mgr)
             deleted = hotfix._deleted_ids if hotfix else set()
             dense_results, dense_ms = dense_retriever.search(query_vec, top_k * 2, deleted)
 
             if hotfix and hotfix.size > 0:
                 from embedrag.query.retrieval.dense import DenseResult
+
                 hotfix_results = hotfix.search(query_vec, top_k)
                 for cid, score in hotfix_results:
                     dense_results.append(DenseResult(chunk_id=cid, score=score))
@@ -121,10 +123,9 @@ async def _run_search_pipeline(
 
         if mode != "dense" and config.search.enable_sparse and query_text:
             from embedrag.query.retrieval.sparse import SparseRetriever
+
             sparse_retriever = SparseRetriever(ctx.db_pool)
-            sparse_results, sparse_ms = sparse_retriever.search(
-                query_text, top_k * 2, filters
-            )
+            sparse_results, sparse_ms = sparse_retriever.search(query_text, top_k * 2, filters)
 
         # Fusion
         t_fusion = time.monotonic()
@@ -174,8 +175,13 @@ async def search(request: Request, body: SearchRequest) -> SearchResponse:
 
     query_vec = np.array(body.query_embedding, dtype=np.float32)
     chunks, score_type, dense_ms, sparse_ms, fusion_ms, _ = await _run_search_pipeline(
-        state, query_vec, body.query_text, body.top_k,
-        body.filters, body.expand_context, body.context_depth,
+        state,
+        query_vec,
+        body.query_text,
+        body.top_k,
+        body.filters,
+        body.expand_context,
+        body.context_depth,
         space=body.space,
     )
 
@@ -211,9 +217,15 @@ async def search_text(request: Request, body: TextSearchRequest) -> SearchRespon
         embed_ms = (time.monotonic() - t_emb) * 1000
 
     chunks, score_type, dense_ms, sparse_ms, fusion_ms, _ = await _run_search_pipeline(
-        state, query_vec, body.query_text, body.top_k,
-        body.filters, body.expand_context, body.context_depth,
-        mode=body.mode, space=body.space,
+        state,
+        query_vec,
+        body.query_text,
+        body.top_k,
+        body.filters,
+        body.expand_context,
+        body.context_depth,
+        mode=body.mode,
+        space=body.space,
     )
 
     total_ms = (time.monotonic() - t_total) * 1000
@@ -242,7 +254,8 @@ async def search_multi(request: Request, body: MultiSpaceSearchRequest) -> Multi
 
     async with state.gen_manager.acquire() as ctx:
         for sq in body.queries:
-            from embedrag.query.retrieval.dense import DenseRetriever, DenseResult
+            from embedrag.query.retrieval.dense import DenseResult, DenseRetriever
+
             shard_mgr = ctx.get_shard_manager(sq.space)
             hotfix = ctx.get_hotfix_buffer(sq.space)
             dense_retriever = DenseRetriever(shard_mgr)
@@ -262,9 +275,12 @@ async def search_multi(request: Request, body: MultiSpaceSearchRequest) -> Multi
 
         # Sparse retrieval on the text query from the first text-space query
         sparse_results = []
-        first_text_query = next((sq for sq in body.queries if sq.query_text and sq.space == "text"), None)
+        first_text_query = next(
+            (sq for sq in body.queries if sq.query_text and sq.space == "text"), None
+        )
         if first_text_query and config.search.enable_sparse:
             from embedrag.query.retrieval.sparse import SparseRetriever
+
             sparse_retriever = SparseRetriever(ctx.db_pool)
             sparse_results, _ = sparse_retriever.search(
                 first_text_query.query_text, top_k * 2, body.filters
@@ -329,6 +345,7 @@ async def debug_search(request: Request, body: DebugSearchRequest) -> DebugSearc
     fts_query_str = ""
     if body.mode != "dense" and config.search.enable_sparse and body.query_text:
         from embedrag.query.retrieval.sparse import SparseRetriever
+
         tmp_retriever = SparseRetriever.__new__(SparseRetriever)
         fts_segs, short_segs = tmp_retriever._split_segments(body.query_text)
         parts = []
@@ -347,6 +364,7 @@ async def debug_search(request: Request, body: DebugSearchRequest) -> DebugSearc
 
         if body.mode != "sparse":
             from embedrag.query.retrieval.dense import DenseRetriever
+
             shard_mgr = ctx.get_shard_manager(space)
             hotfix = ctx.get_hotfix_buffer(space)
             dense_retriever = DenseRetriever(shard_mgr)
@@ -355,6 +373,7 @@ async def debug_search(request: Request, body: DebugSearchRequest) -> DebugSearc
 
             if hotfix and hotfix.size > 0:
                 from embedrag.query.retrieval.dense import DenseResult
+
                 hotfix_hits = hotfix.search(query_vec, top_k)
                 for cid, score in hotfix_hits:
                     dense_results.append(DenseResult(chunk_id=cid, score=score))
@@ -362,6 +381,7 @@ async def debug_search(request: Request, body: DebugSearchRequest) -> DebugSearc
 
         if body.mode != "dense" and config.search.enable_sparse and body.query_text:
             from embedrag.query.retrieval.sparse import SparseRetriever
+
             sparse_retriever = SparseRetriever(ctx.db_pool)
             sparse_results, sparse_ms = sparse_retriever.search(
                 body.query_text, top_k * 2, body.filters
@@ -414,20 +434,26 @@ async def debug_search(request: Request, body: DebugSearchRequest) -> DebugSearc
     dense_rank_map = {r.chunk_id: i for i, r in enumerate(dense_results)}
     sparse_rank_map = {r.chunk_id: i for i, r in enumerate(sparse_results)}
 
-    debug_dense = [DebugDenseHit(chunk_id=r.chunk_id, score=round(r.score, 6)) for r in dense_results]
-    debug_sparse = [DebugSparseHit(chunk_id=r.chunk_id, score=round(r.score, 6)) for r in sparse_results]
+    debug_dense = [
+        DebugDenseHit(chunk_id=r.chunk_id, score=round(r.score, 6)) for r in dense_results
+    ]
+    debug_sparse = [
+        DebugSparseHit(chunk_id=r.chunk_id, score=round(r.score, 6)) for r in sparse_results
+    ]
 
     debug_fused = []
     if fused_list:
         for f in fused_list:
-            debug_fused.append(DebugFusedHit(
-                chunk_id=f.chunk_id,
-                rrf_score=round(f.rrf_score, 6),
-                dense_score=round(f.dense_score, 6),
-                sparse_score=round(f.sparse_score, 6),
-                dense_rank=dense_rank_map.get(f.chunk_id, -1),
-                sparse_rank=sparse_rank_map.get(f.chunk_id, -1),
-            ))
+            debug_fused.append(
+                DebugFusedHit(
+                    chunk_id=f.chunk_id,
+                    rrf_score=round(f.rrf_score, 6),
+                    dense_score=round(f.dense_score, 6),
+                    sparse_score=round(f.sparse_score, 6),
+                    dense_rank=dense_rank_map.get(f.chunk_id, -1),
+                    sparse_rank=sparse_rank_map.get(f.chunk_id, -1),
+                )
+            )
 
     if fused_list:
         debug_score_type = "rrf"
@@ -472,7 +498,10 @@ async def debug_search(request: Request, body: DebugSearchRequest) -> DebugSearc
 
 @router.get("/api/chunks/{chunk_id}/neighbors")
 async def chunk_neighbors(
-    request: Request, chunk_id: str, before: int = 3, after: int = 3,
+    request: Request,
+    chunk_id: str,
+    before: int = 3,
+    after: int = 3,
 ) -> dict:
     """Get neighboring chunks for context viewing.
 
@@ -547,6 +576,7 @@ async def trigger_sync(request: Request, body: SyncTriggerRequest | None = None)
     snapshot_dir = (body.snapshot_dir if body else "").strip()
     if snapshot_dir:
         from pathlib import Path
+
         from embedrag.models.manifest import Manifest
         from embedrag.query.lifecycle.startup import load_generation, quick_verify_snapshot
 
@@ -563,25 +593,33 @@ async def trigger_sync(request: Request, body: SyncTriggerRequest | None = None)
             raise HTTPException(status_code=500, detail="Snapshot integrity check failed")
 
         ctx = load_generation(
-            snapshot_dir, manifest,
+            snapshot_dir,
+            manifest,
             nprobe=state.config.index.nprobe,
             use_mmap=state.config.index.mmap,
         )
         await state.gen_manager.swap(ctx)
-        logger.info("sync_local", old_version=current, new_version=manifest.snapshot_version, dir=snapshot_dir)
+        logger.info(
+            "sync_local",
+            old_version=current,
+            new_version=manifest.snapshot_version,
+            dir=snapshot_dir,
+        )
         return {"status": "synced", "source": snapshot_dir, "version": manifest.snapshot_version}
 
     source_url = (body.source_url if body else "").strip()
     if source_url:
-        from embedrag.shared.http_snapshot_client import HttpSnapshotClient
+        from pathlib import Path
+
         from embedrag.query.sync.downloader import SnapshotDownloader
         from embedrag.query.sync.syncer import SnapshotSyncer
-        from pathlib import Path
+        from embedrag.shared.http_snapshot_client import HttpSnapshotClient
 
         client = HttpSnapshotClient(source_url, timeout=state.config.sync.download_timeout_seconds)
         staging = str(Path(state.config.node.data_dir) / "staging")
         downloader = SnapshotDownloader(
-            client, staging,
+            client,
+            staging,
             concurrency=state.config.sync.download_concurrency,
             timeout=state.config.sync.download_timeout_seconds,
         )
@@ -636,6 +674,7 @@ async def reload_snapshot(request: Request, body: dict | None = None) -> dict:
     config = state.config
 
     from pathlib import Path
+
     from embedrag.models.manifest import Manifest
     from embedrag.query.lifecycle.startup import load_generation, quick_verify_snapshot
 
@@ -663,7 +702,8 @@ async def reload_snapshot(request: Request, body: dict | None = None) -> dict:
         raise HTTPException(status_code=500, detail="Snapshot integrity check failed")
 
     ctx = load_generation(
-        snapshot_dir, manifest,
+        snapshot_dir,
+        manifest,
         nprobe=config.index.nprobe,
         use_mmap=config.index.mmap,
     )
@@ -694,6 +734,7 @@ async def rerank_proxy(req: RerankRequest) -> RerankResponse:
     browser CORS issues when the reranker runs on a different origin.
     """
     import math
+
     import httpx
 
     url = req.url
@@ -709,7 +750,9 @@ async def rerank_proxy(req: RerankRequest) -> RerankResponse:
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(url, json={"model": model, "input": all_inputs})
     if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"Reranker returned {resp.status_code}: {resp.text[:300]}")
+        raise HTTPException(
+            status_code=502, detail=f"Reranker returned {resp.status_code}: {resp.text[:300]}"
+        )
 
     data = resp.json()["data"]
     data.sort(key=lambda x: x["index"])

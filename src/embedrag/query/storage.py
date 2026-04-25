@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import queue
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import lru_cache
-from typing import Iterator, Optional
 
 from embedrag.logging_setup import get_logger
 from embedrag.models.api import ChunkResult
@@ -69,7 +69,7 @@ class QueryDocStore:
                 results.append(row)
         return results
 
-    def _get_chunk_uncached(self, chunk_id: str) -> Optional[ChunkResult]:
+    def _get_chunk_uncached(self, chunk_id: str) -> ChunkResult | None:
         with self._pool.connection() as conn:
             row = conn.execute(
                 "SELECT c.chunk_id, c.doc_id, c.text, c.level, c.level_type, "
@@ -92,7 +92,7 @@ class QueryDocStore:
                 metadata=metadata,
             )
 
-    def get_parent_chunk_text(self, chunk_id: str) -> Optional[str]:
+    def get_parent_chunk_text(self, chunk_id: str) -> str | None:
         """Get the parent chunk's text for context expansion."""
         with self._pool.connection() as conn:
             row = conn.execute(
@@ -118,15 +118,17 @@ class QueryDocStore:
             results = []
             for row in rows:
                 metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
-                results.append(ChunkResult(
-                    chunk_id=row["chunk_id"],
-                    doc_id=row["doc_id"],
-                    text=row["text"],
-                    score=0.0,
-                    level=row["level"],
-                    level_type=row["level_type"],
-                    metadata=metadata,
-                ))
+                results.append(
+                    ChunkResult(
+                        chunk_id=row["chunk_id"],
+                        doc_id=row["doc_id"],
+                        text=row["text"],
+                        score=0.0,
+                        level=row["level"],
+                        level_type=row["level_type"],
+                        metadata=metadata,
+                    )
+                )
             return results
 
     def get_neighbors(self, chunk_id: str, before: int = 2, after: int = 2) -> dict:
@@ -171,18 +173,28 @@ class QueryDocStore:
 
             return {
                 "before": [
-                    {"chunk_id": r["chunk_id"], "text": r["text"],
-                     "seq": r["seq_in_parent"], "level_type": r["level_type"]}
+                    {
+                        "chunk_id": r["chunk_id"],
+                        "text": r["text"],
+                        "seq": r["seq_in_parent"],
+                        "level_type": r["level_type"],
+                    }
                     for r in reversed(before_rows)
                 ],
                 "current": {
                     "chunk_id": chunk_id,
                     "text": current.text if current else "",
                     "seq": seq,
-                } if current else None,
+                }
+                if current
+                else None,
                 "after": [
-                    {"chunk_id": r["chunk_id"], "text": r["text"],
-                     "seq": r["seq_in_parent"], "level_type": r["level_type"]}
+                    {
+                        "chunk_id": r["chunk_id"],
+                        "text": r["text"],
+                        "seq": r["seq_in_parent"],
+                        "level_type": r["level_type"],
+                    }
                     for r in after_rows
                 ],
             }

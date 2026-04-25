@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import msgpack
 
 from embedrag.logging_setup import get_logger
@@ -23,13 +21,12 @@ class IDMapper:
         self._maps = shard_id_maps
 
     @classmethod
-    def load(cls, id_map_path: str, shard_sizes: list[int]) -> "IDMapper":
+    def load(cls, id_map_path: str, shard_sizes: list[int]) -> IDMapper:
         """Load from a msgpack file and split into per-shard maps."""
         with open(id_map_path, "rb") as f:
             flat_map: dict = msgpack.unpack(f, strict_map_key=False)
 
         flat_map = {int(k): v for k, v in flat_map.items()}
-        sorted_keys = sorted(flat_map.keys())
 
         shard_maps: list[dict[int, str]] = []
         offset = 0

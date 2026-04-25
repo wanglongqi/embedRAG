@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -13,6 +13,6 @@ class SnapshotClient(Protocol):
     Both ``ObjectStoreClient`` and ``HttpSnapshotClient`` satisfy this.
     """
 
-    def get_json(self, remote_path: str) -> Optional[dict]: ...
+    def get_json(self, remote_path: str) -> dict | None: ...
 
     def download_file(self, remote_path: str, local_path: str | Path) -> None: ...

@@ -45,10 +45,10 @@ class TestShardWorker:
 
         q = np.random.randn(1, dim).astype(np.float32)
         faiss.normalize_L2(q)
-        D, I = worker.search(q, 5)
-        assert D.shape == (1, 5)
-        assert I.shape == (1, 5)
-        assert all(i >= 0 for i in I[0])
+        distances, indices = worker.search(q, 5)
+        assert distances.shape == (1, 5)
+        assert indices.shape == (1, 5)
+        assert all(i >= 0 for i in indices[0])
         worker.shutdown()
 
 

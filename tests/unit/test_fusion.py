@@ -1,11 +1,10 @@
 """Tests for RRF fusion and hotfix buffer."""
 
 import numpy as np
-import pytest
 
 from embedrag.query.index.hotfix import HotfixBuffer, HotfixChunkData
 from embedrag.query.retrieval.dense import DenseResult
-from embedrag.query.retrieval.fusion import FusedResult, rrf_fuse
+from embedrag.query.retrieval.fusion import rrf_fuse
 from embedrag.query.retrieval.sparse import SparseResult
 
 
@@ -44,6 +43,7 @@ class TestRRFFusion:
         dense = [DenseResult(chunk_id="a", score=0.9)]
         sparse = [SparseResult(chunk_id="b", score=5.0)]
         fused_equal = rrf_fuse(dense, sparse, top_k=2, dense_weight=1.0, sparse_weight=1.0)
+        assert len(fused_equal) == 2
         fused_dense = rrf_fuse(dense, sparse, top_k=2, dense_weight=2.0, sparse_weight=0.5)
         # With heavy dense weight, "a" should rank higher
         assert fused_dense[0].chunk_id == "a"

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class NodePhase(str, Enum):
+class NodePhase(StrEnum):
     STARTING = "starting"
     DOWNLOADING = "downloading"
     LOADING = "loading"
