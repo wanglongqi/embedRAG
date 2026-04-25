@@ -158,8 +158,7 @@ class WriterSQLitePool:
             )
             if emb_rows:
                 conn.executemany(
-                    "INSERT OR REPLACE INTO chunk_embeddings (chunk_id, space, embedding) "
-                    "VALUES (?, ?, ?)",
+                    "INSERT OR REPLACE INTO chunk_embeddings (chunk_id, space, embedding) VALUES (?, ?, ?)",
                     emb_rows,
                 )
             conn.commit()
@@ -231,16 +230,11 @@ class WriterSQLitePool:
     async def insert_closure_batch(self, relations: list[tuple[str, str, int]]) -> None:
         """Insert closure table entries: (ancestor_id, descendant_id, depth)."""
         async with self.write_conn() as conn:
-            sql = (
-                "INSERT OR IGNORE INTO chunk_closure (ancestor_id, descendant_id, depth) "
-                "VALUES (?, ?, ?)"
-            )
+            sql = "INSERT OR IGNORE INTO chunk_closure (ancestor_id, descendant_id, depth) VALUES (?, ?, ?)"
             conn.executemany(sql, relations)
             conn.commit()
 
-    async def get_all_chunks_with_embeddings(
-        self, space: str = "text"
-    ) -> list[tuple[str, np.ndarray]]:
+    async def get_all_chunks_with_embeddings(self, space: str = "text") -> list[tuple[str, np.ndarray]]:
         """Read all (chunk_id, embedding) pairs for a given space."""
         async with self.read_conn() as conn:
             rows = conn.execute(
@@ -252,9 +246,7 @@ class WriterSQLitePool:
     async def get_embedding_spaces(self) -> list[str]:
         """Return all distinct embedding space names."""
         async with self.read_conn() as conn:
-            rows = conn.execute(
-                "SELECT DISTINCT space FROM chunk_embeddings ORDER BY space"
-            ).fetchall()
+            rows = conn.execute("SELECT DISTINCT space FROM chunk_embeddings ORDER BY space").fetchall()
             return [r[0] for r in rows]
 
     async def get_chunk_count(self) -> int:
@@ -271,10 +263,7 @@ class WriterSQLitePool:
         """Delete a document and all its chunks. Returns chunks deleted."""
         async with self.write_conn() as conn:
             chunk_ids = [
-                r[0]
-                for r in conn.execute(
-                    "SELECT chunk_id FROM chunks WHERE doc_id = ?", (doc_id,)
-                ).fetchall()
+                r[0] for r in conn.execute("SELECT chunk_id FROM chunks WHERE doc_id = ?", (doc_id,)).fetchall()
             ]
             if chunk_ids:
                 placeholders = ",".join("?" * len(chunk_ids))
@@ -364,9 +353,7 @@ class WriterSQLitePool:
         for row in src.execute("SELECT * FROM chunk_closure"):
             dst.execute("INSERT INTO chunk_closure VALUES (?,?,?)", tuple(row))
 
-        for row in src.execute(
-            "SELECT chunk_id, text, text_norm, title, title_norm, tags FROM chunks_fts"
-        ):
+        for row in src.execute("SELECT chunk_id, text, text_norm, title, title_norm, tags FROM chunks_fts"):
             dst.execute("INSERT INTO chunks_fts VALUES (?,?,?,?,?,?)", tuple(row))
 
         doc_count = dst.execute("SELECT count(*) FROM documents").fetchone()[0]

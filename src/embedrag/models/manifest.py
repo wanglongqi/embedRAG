@@ -61,9 +61,7 @@ class Manifest:
 
     indexes: dict[str, IndexInfo] = field(default_factory=lambda: {"text": IndexInfo()})
     db: FileEntry = field(default_factory=lambda: FileEntry(file="db/embedrag.db"))
-    id_maps: dict[str, FileEntry] = field(
-        default_factory=lambda: {"text": FileEntry(file="index/text/id_map.msgpack")}
-    )
+    id_maps: dict[str, FileEntry] = field(default_factory=lambda: {"text": FileEntry(file="index/text/id_map.msgpack")})
 
     total_raw_size: int = 0
     total_compressed_size: int = 0
@@ -204,13 +202,10 @@ class Manifest:
                 chunk_count=d.get("chunk_count", 0),
             )
 
-        indexes = {space: _parse_index(d) for space, d in data.get("indexes", {}).items()} or {
-            "text": IndexInfo()
-        }
+        indexes = {space: _parse_index(d) for space, d in data.get("indexes", {}).items()} or {"text": IndexInfo()}
 
         id_maps = {
-            space: _parse_file_entry(d, f"index/{space}/id_map.msgpack")
-            for space, d in data.get("id_maps", {}).items()
+            space: _parse_file_entry(d, f"index/{space}/id_map.msgpack") for space, d in data.get("id_maps", {}).items()
         } or {"text": FileEntry(file="index/text/id_map.msgpack")}
 
         db_data = data.get("db", {})

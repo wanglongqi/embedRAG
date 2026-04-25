@@ -123,9 +123,7 @@ def _resolve_version(client: ObjectStoreClient, bootstrap_version: str) -> str |
     return bootstrap_version
 
 
-async def _download_snapshot(
-    client: ObjectStoreClient, version: str, snap_dir: str, config
-) -> None:
+async def _download_snapshot(client: ObjectStoreClient, version: str, snap_dir: str, config) -> None:
     """Download a full snapshot from object store."""
     Path(snap_dir).mkdir(parents=True, exist_ok=True)
 

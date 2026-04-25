@@ -96,9 +96,7 @@ class QueryDocStore:
         """Get the parent chunk's text for context expansion."""
         with self._pool.connection() as conn:
             row = conn.execute(
-                "SELECT p.text FROM chunks c "
-                "JOIN chunks p ON c.parent_chunk_id = p.chunk_id "
-                "WHERE c.chunk_id = ?",
+                "SELECT p.text FROM chunks c JOIN chunks p ON c.parent_chunk_id = p.chunk_id WHERE c.chunk_id = ?",
                 (chunk_id,),
             ).fetchone()
             return row["text"] if row else None

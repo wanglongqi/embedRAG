@@ -100,9 +100,7 @@ class IndexBuilder:
             msgpack.pack(str_id_map, f)
 
         elapsed = time.monotonic() - t0
-        logger.info(
-            "index_build_done", space=space, elapsed_s=round(elapsed, 1), shards=len(shard_entries)
-        )
+        logger.info("index_build_done", space=space, elapsed_s=round(elapsed, 1), shards=len(shard_entries))
 
         index_info = IndexInfo(
             type=index_type,
@@ -125,9 +123,7 @@ class IndexBuilder:
             return f"IVF{nlist},Flat"
         return f"IVF{nlist},PQ{pq_m}"
 
-    def _build_single_shard(
-        self, vectors: np.ndarray, index_type: str, total_vectors: int
-    ) -> faiss.Index:
+    def _build_single_shard(self, vectors: np.ndarray, index_type: str, total_vectors: int) -> faiss.Index:
         """Build a single FAISS index for one shard."""
         n = vectors.shape[0]
         dim = vectors.shape[1]

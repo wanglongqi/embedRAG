@@ -146,9 +146,7 @@ def main():
                 }
             )
 
-    print(
-        f"Parsed {len(all_docs)} quotes from {len(list(DATA_DIR.glob('chapter_*.txt')))} chapters"
-    )
+    print(f"Parsed {len(all_docs)} quotes from {len(list(DATA_DIR.glob('chapter_*.txt')))} chapters")
 
     total_docs = 0
     total_chunks = 0
@@ -160,9 +158,7 @@ def main():
         print(f"  Ingesting {desc}...", end=" ", flush=True)
         t = time.time()
         try:
-            resp = requests.post(
-                f"{args.writer_url}/ingest", json={"documents": batch}, timeout=300
-            )
+            resp = requests.post(f"{args.writer_url}/ingest", json={"documents": batch}, timeout=300)
             resp.raise_for_status()
             r = resp.json()
             total_docs += r["ingested"]

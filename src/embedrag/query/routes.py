@@ -127,7 +127,9 @@ async def _run_search_pipeline(
         t_fusion = time.monotonic()
         if sparse_results and dense_results:
             fused = rrf_fuse(
-                dense_results, sparse_results, top_k,
+                dense_results,
+                sparse_results,
+                top_k,
                 dense_weight=config.search.dense_weight,
                 sparse_weight=config.search.sparse_weight,
             )
@@ -273,18 +275,16 @@ async def search_multi(request: Request, body: MultiSpaceSearchRequest) -> Multi
 
         # Sparse retrieval on the text query from the first text-space query
         sparse_results: list[SparseResult] = []
-        first_text_query = next(
-            (sq for sq in body.queries if sq.query_text and sq.space == "text"), None
-        )
+        first_text_query = next((sq for sq in body.queries if sq.query_text and sq.space == "text"), None)
         if first_text_query and config.search.enable_sparse:
             sparse_retriever = SparseRetriever(ctx.db_pool)
-            sparse_results, _ = sparse_retriever.search(
-                first_text_query.query_text or "", top_k * 2, body.filters
-            )
+            sparse_results, _ = sparse_retriever.search(first_text_query.query_text or "", top_k * 2, body.filters)
 
         if sparse_results and all_dense_results:
             fused = rrf_fuse(
-                all_dense_results, sparse_results, top_k,
+                all_dense_results,
+                sparse_results,
+                top_k,
                 dense_weight=config.search.dense_weight,
                 sparse_weight=config.search.sparse_weight,
             )
@@ -377,16 +377,16 @@ async def debug_search(request: Request, body: DebugSearchRequest) -> DebugSearc
 
         if body.mode != "dense" and config.search.enable_sparse and body.query_text:
             sparse_retriever = SparseRetriever(ctx.db_pool)
-            sparse_results, sparse_ms = sparse_retriever.search(
-                body.query_text, top_k * 2, body.filters
-            )
+            sparse_results, sparse_ms = sparse_retriever.search(body.query_text, top_k * 2, body.filters)
 
         # Fusion
         t_fusion = time.monotonic()
         fused_list = []
         if sparse_results and dense_results:
             fused_list = rrf_fuse(
-                dense_results, sparse_results, top_k,
+                dense_results,
+                sparse_results,
+                top_k,
                 dense_weight=config.search.dense_weight,
                 sparse_weight=config.search.sparse_weight,
             )
@@ -432,12 +432,8 @@ async def debug_search(request: Request, body: DebugSearchRequest) -> DebugSearc
     dense_rank_map = {r.chunk_id: i for i, r in enumerate(dense_results)}
     sparse_rank_map = {r.chunk_id: i for i, r in enumerate(sparse_results)}
 
-    debug_dense = [
-        DebugDenseHit(chunk_id=r.chunk_id, score=round(r.score, 6)) for r in dense_results
-    ]
-    debug_sparse = [
-        DebugSparseHit(chunk_id=r.chunk_id, score=round(r.score, 6)) for r in sparse_results
-    ]
+    debug_dense = [DebugDenseHit(chunk_id=r.chunk_id, score=round(r.score, 6)) for r in dense_results]
+    debug_sparse = [DebugSparseHit(chunk_id=r.chunk_id, score=round(r.score, 6)) for r in sparse_results]
 
     debug_fused = []
     if fused_list:
@@ -620,7 +616,8 @@ async def trigger_sync(request: Request, body: SyncTriggerRequest | None = None)
 
             staging = str(Path(state.config.node.data_dir) / "staging" / "archive_sync")
             snap_dir = download_and_extract_archive(
-                source_url, staging,
+                source_url,
+                staging,
                 timeout=state.config.sync.download_timeout_seconds,
             )
             manifest = verify_archive_snapshot(snap_dir)
@@ -630,7 +627,8 @@ async def trigger_sync(request: Request, body: SyncTriggerRequest | None = None)
             if not quick_verify_snapshot(snap_dir, manifest):
                 raise HTTPException(status_code=500, detail="Archive snapshot integrity check failed")
             ctx = load_generation(
-                snap_dir, manifest,
+                snap_dir,
+                manifest,
                 nprobe=state.config.index.nprobe,
                 use_mmap=state.config.index.mmap,
             )
@@ -776,9 +774,7 @@ async def rerank_proxy(req: RerankRequest) -> RerankResponse:
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(url, json={"model": model, "input": all_inputs})
     if resp.status_code != 200:
-        raise HTTPException(
-            status_code=502, detail=f"Reranker returned {resp.status_code}: {resp.text[:300]}"
-        )
+        raise HTTPException(status_code=502, detail=f"Reranker returned {resp.status_code}: {resp.text[:300]}")
 
     data = resp.json()["data"]
     data.sort(key=lambda x: x["index"])

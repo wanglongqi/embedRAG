@@ -22,9 +22,7 @@ DEFAULT_INPUT = PROJECT_ROOT / "data" / "quantangshi_poems.jsonl"
 def main():
     parser = argparse.ArgumentParser(description="Ingest 全唐诗 into EmbedRAG")
     parser.add_argument("--writer-url", default="http://localhost:8001")
-    parser.add_argument(
-        "--input", type=Path, default=DEFAULT_INPUT, help="JSONL file produced by download_poems.py"
-    )
+    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="JSONL file produced by download_poems.py")
     parser.add_argument("--batch-size", type=int, default=50, help="Poems per /ingest call")
     args = parser.parse_args()
 
@@ -128,10 +126,7 @@ def main():
             total_chunks += result["chunk_count"]
             elapsed = time.time() - t_batch
             if (i // args.batch_size) % 20 == 0 or i + args.batch_size >= len(poems):
-                msg = (
-                    f"OK ({result['ingested']} docs, "
-                    f"{result['chunk_count']} chunks, {elapsed:.1f}s)"
-                )
+                msg = f"OK ({result['ingested']} docs, {result['chunk_count']} chunks, {elapsed:.1f}s)"
                 print(msg)
         except Exception as e:
             print(f"FAILED at {desc}: {e}")

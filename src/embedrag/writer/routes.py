@@ -243,10 +243,7 @@ async def build_archive(request: Request, body: ArchiveRequest = ArchiveRequest(
 
     fmt = body.format.lower().lstrip(".")
     if fmt not in VALID_ARCHIVE_FORMATS:
-        raise ValueError(
-            f"Unsupported format {body.format!r}. "
-            f"Choose from: {', '.join(sorted(VALID_ARCHIVE_FORMATS))}"
-        )
+        raise ValueError(f"Unsupported format {body.format!r}. Choose from: {', '.join(sorted(VALID_ARCHIVE_FORMATS))}")
 
     from embedrag.shared.archive import create_snapshot_archive
 

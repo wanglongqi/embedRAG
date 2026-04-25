@@ -89,9 +89,7 @@ class SnapshotDownloader:
         new_manifest.save(str(target / "manifest.json"))
         return str(target)
 
-    async def _download_one(
-        self, version: str, file_path: str, target: Path, manifest: Manifest
-    ) -> None:
+    async def _download_one(self, version: str, file_path: str, target: Path, manifest: Manifest) -> None:
         """Download a single file with retry and streaming checksum."""
         async with self._semaphore:
             local_path = target / file_path

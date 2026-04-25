@@ -136,16 +136,12 @@ def main():
             print(f"  Ingesting {desc}...", end=" ", flush=True)
             t = time.time()
             try:
-                resp = requests.post(
-                    f"{args.writer_url}/ingest", json={"documents": batch}, timeout=300
-                )
+                resp = requests.post(f"{args.writer_url}/ingest", json={"documents": batch}, timeout=300)
                 resp.raise_for_status()
                 r = resp.json()
                 total_docs += r["ingested"]
                 total_chunks += r["chunk_count"]
-                print(
-                    f"OK ({r['ingested']} docs, {r['chunk_count']} chunks, {time.time() - t:.1f}s)"
-                )
+                print(f"OK ({r['ingested']} docs, {r['chunk_count']} chunks, {time.time() - t:.1f}s)")
             except Exception as e:
                 print(f"FAILED: {e}")
 

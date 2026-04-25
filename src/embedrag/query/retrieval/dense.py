@@ -54,9 +54,7 @@ class ShardManager:
         all_results.sort(key=lambda r: r.score, reverse=True)
         return all_results[:top_k]
 
-    def _search_one(
-        self, shard_idx: int, worker: ShardWorker, query: np.ndarray, top_k: int
-    ) -> list[DenseResult]:
+    def _search_one(self, shard_idx: int, worker: ShardWorker, query: np.ndarray, top_k: int) -> list[DenseResult]:
         distances, indices = worker.search(query, top_k)
         results: list[DenseResult] = []
         for dist, fid in zip(distances[0], indices[0]):

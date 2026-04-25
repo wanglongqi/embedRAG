@@ -23,10 +23,7 @@ def sample_documents():
             {
                 "doc_id": f"faq_{i:03d}",
                 "title": f"FAQ Question {i}",
-                "text": (
-                    f"Q: What is item {i}? "
-                    f"A: Item {i} is a frequently asked question about topic {i}."
-                ),
+                "text": (f"Q: What is item {i}? A: Item {i} is a frequently asked question about topic {i}."),
                 "doc_type": "faq",
                 "source": "test",
             }

@@ -90,9 +90,7 @@ class SnapshotPackager:
             id_map_raw = space_id_map_paths[space]
             id_map_file = f"index/{space}/id_map.msgpack"
             id_map_compressed_file = f"index/{space}/id_map.msgpack.zst"
-            id_map_compressed_size = compress_file(
-                id_map_raw, out / id_map_compressed_file, self._compression_level
-            )
+            id_map_compressed_size = compress_file(id_map_raw, out / id_map_compressed_file, self._compression_level)
             all_id_maps[space] = FileEntry(
                 file=id_map_file,
                 compressed_file=id_map_compressed_file,
@@ -105,9 +103,7 @@ class SnapshotPackager:
             total_compressed += id_map_compressed_size
 
         db_compressed_file = "db/embedrag.db.zst"
-        db_compressed_size = compress_file(
-            db_path, out / db_compressed_file, self._compression_level
-        )
+        db_compressed_size = compress_file(db_path, out / db_compressed_file, self._compression_level)
         db_entry = FileEntry(
             file="db/embedrag.db",
             compressed_file=db_compressed_file,

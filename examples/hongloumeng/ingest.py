@@ -43,9 +43,7 @@ def clean_text(text: str) -> str:
 def main():
     parser = argparse.ArgumentParser(description="Ingest 红楼梦 into EmbedRAG")
     parser.add_argument("--writer-url", default="http://localhost:8001")
-    parser.add_argument(
-        "--batch-size", type=int, default=5, help="Number of chapters per /ingest call"
-    )
+    parser.add_argument("--batch-size", type=int, default=5, help="Number of chapters per /ingest call")
     args = parser.parse_args()
 
     chapter_files = sorted(DATA_DIR.glob("chapter_*.txt"))

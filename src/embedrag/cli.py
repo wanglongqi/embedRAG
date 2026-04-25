@@ -31,11 +31,15 @@ def main() -> None:
     pp = sub.add_parser("pull", help="Download a snapshot from a URL (GitHub Release, CDN, etc.)")
     pp.add_argument("url", help="Snapshot URL: archive (.tar.zst) or base URL with latest.json")
     pp.add_argument(
-        "--output", "-o", default="./snapshot/active",
+        "--output",
+        "-o",
+        default="./snapshot/active",
         help="Output directory (default: ./snapshot/active)",
     )
     pp.add_argument(
-        "--timeout", type=int, default=600,
+        "--timeout",
+        type=int,
+        default=600,
         help="Download timeout in seconds (default: 600)",
     )
 
@@ -105,7 +109,6 @@ def _run_pull(url: str, output: str = "./snapshot/active", timeout: int = 600) -
             if staging_path.exists():
                 shutil.rmtree(str(staging_path), ignore_errors=True)
     else:
-
         from embedrag.models.manifest import Manifest
         from embedrag.shared.http_snapshot_client import HttpSnapshotClient
 
@@ -207,10 +210,7 @@ def _run_migrate(path: str, dry_run: bool = False) -> None:
             manifest_data = json.load(f)
         manifest_version = manifest_data.get("manifest_version", 0)
         needs_manifest_upgrade = "index" in manifest_data and "indexes" not in manifest_data
-        print(
-            f"Manifest:     v{manifest_version}"
-            + (" (needs v3 upgrade)" if needs_manifest_upgrade else " (ok)")
-        )
+        print(f"Manifest:     v{manifest_version}" + (" (needs v3 upgrade)" if needs_manifest_upgrade else " (ok)"))
     else:
         needs_manifest_upgrade = False
         print(f"Manifest:     not found at {manifest_path}")
@@ -226,9 +226,7 @@ def _run_migrate(path: str, dry_run: bool = False) -> None:
         if db_needs_upgrade:
             print(f"  - Migrate DB schema v{db_version} -> v{CURRENT_SCHEMA_VERSION}")
         if needs_manifest_upgrade:
-            print(
-                f"  - Convert manifest v{manifest_version} -> v3 (index->indexes, id_map->id_maps)"
-            )
+            print(f"  - Convert manifest v{manifest_version} -> v3 (index->indexes, id_map->id_maps)")
         return
 
     # ── Perform migration ──

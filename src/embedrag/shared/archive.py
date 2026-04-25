@@ -50,6 +50,7 @@ def create_snapshot_archive(
         _create_tar_zst(snap, out, compression_level)
     elif fmt in ("tar.gz", "tgz"):
         import gzip
+
         with open(out, "wb") as f_out:
             with gzip.GzipFile(fileobj=f_out, mode="wb", compresslevel=min(compression_level, 9)) as gz:
                 with tarfile.open(fileobj=gz, mode="w") as tf:
@@ -120,9 +121,7 @@ def verify_archive_snapshot(snapshot_dir: str) -> Manifest:
     """Load and return the manifest, raising if it doesn't exist."""
     manifest_path = Path(snapshot_dir) / "manifest.json"
     if not manifest_path.exists():
-        raise FileNotFoundError(
-            f"No manifest.json found in extracted archive at {snapshot_dir}"
-        )
+        raise FileNotFoundError(f"No manifest.json found in extracted archive at {snapshot_dir}")
     return Manifest.load(manifest_path)
 
 
@@ -187,6 +186,4 @@ def _find_snapshot_root(base: Path) -> Path:
             if grandchild.is_dir() and (grandchild / "manifest.json").exists():
                 return grandchild
 
-    raise FileNotFoundError(
-        f"No manifest.json found in extracted archive under {base}"
-    )
+    raise FileNotFoundError(f"No manifest.json found in extracted archive under {base}")

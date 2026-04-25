@@ -34,9 +34,7 @@ NOISE = {
 def fetch_volume_html(vol_num: int) -> str:
     encoded_vol = urllib.parse.quote(f"卷{vol_num:03d}")
     url = f"https://zh.wikisource.org/wiki/%E5%85%A8%E5%94%90%E8%A9%A9/{encoded_vol}"
-    req = urllib.request.Request(
-        url, headers={"User-Agent": "Mozilla/5.0 (compatible; miniRAG-QTS/1.0)"}
-    )
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; miniRAG-QTS/1.0)"})
     with urllib.request.urlopen(req, timeout=30) as resp:
         return resp.read().decode("utf-8")
 

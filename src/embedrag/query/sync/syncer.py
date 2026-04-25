@@ -118,9 +118,7 @@ class SnapshotSyncer:
                 current_manifest = self._state.gen_manager.active.manifest
                 current_dir = str(Path(config.node.data_dir) / "active" / current)
 
-            snap_dir = await self._downloader.download_snapshot(
-                new_manifest, current_manifest, current_dir
-            )
+            snap_dir = await self._downloader.download_snapshot(new_manifest, current_manifest, current_dir)
 
             if not quick_verify_snapshot(snap_dir, new_manifest):
                 logger.error("sync_verify_failed", version=new_version)
