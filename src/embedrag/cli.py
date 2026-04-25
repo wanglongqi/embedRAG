@@ -105,7 +105,6 @@ def _run_pull(url: str, output: str = "./snapshot/active", timeout: int = 600) -
             if staging_path.exists():
                 shutil.rmtree(str(staging_path), ignore_errors=True)
     else:
-        import asyncio
 
         from embedrag.models.manifest import Manifest
         from embedrag.shared.http_snapshot_client import HttpSnapshotClient
@@ -152,7 +151,7 @@ def _run_pull(url: str, output: str = "./snapshot/active", timeout: int = 600) -
         print(f"\nSnapshot ready at: {target}")
 
     print("Start the query node with:")
-    print(f"  uv run embedrag query --config <your-query.yaml>")
+    print("  uv run embedrag query --config <your-query.yaml>")
     print(f"  (set data_dir to point to: {output_path})")
 
 
