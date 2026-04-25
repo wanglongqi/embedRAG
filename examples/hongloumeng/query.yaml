@@ -33,6 +33,11 @@ server:
   port: 8000
   workers: 1
 
+sync:
+  enabled: true
+  source: http
+  http_url: "https://github.com/wanglongqi/embedRAG/releases/download/v0.5.0/hongloumeng.tar.zst"
+
 logging:
   level: INFO
   format: console

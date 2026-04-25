@@ -17,8 +17,7 @@ from pathlib import Path
 
 # Biography keywords that typically appear in author bio paragraphs
 _BIO_MARKERS = re.compile(
-    r"(字[^\s，]{1,4}|號[^\s，]{1,6}|人\s*[。，]|詩\s*\d+\s*首|"
-    r"貞觀|開元|天寶|大曆|元和|長慶|會昌)"
+    r"(字[^\s，]{1,4}|號[^\s，]{1,6}|人\s*[。，]|詩\s*\d+\s*首|" r"貞觀|開元|天寶|大曆|元和|長慶|會昌)"
 )
 
 NOISE = {

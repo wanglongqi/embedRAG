@@ -4,7 +4,7 @@ All 900 volumes of 全唐诗 (~33,500 poems) indexed as individual documents. De
 
 ## Stats
 
-- ~33,500 poems from 900 volumes, ~35,000 chunks, 4 FAISS shards
+- ~33,500 poems from 900 volumes, ~35,000 chunks, 1024-dim embeddings (`text-embedding-qwen3-embedding-0.6b`), 4 FAISS shards
 - Chunking strategy: `plain` (each poem is short enough to be a single chunk)
 - Hierarchy expansion: **disabled** (poems are standalone, no parent/child context)
 - Author bios are ingested as separate documents with `doc_type: author_bio`
@@ -42,7 +42,7 @@ curl -X POST http://localhost:8000/search/text \
 
 ### Option B: Build from scratch
 
-Requires an OpenAI-compatible embedding service at `127.0.0.1:1234`.
+Requires an OpenAI-compatible embedding service (see `writer.yaml`).
 
 ```bash
 # 1. Download poems (takes ~4 minutes, fetches from Wikisource)

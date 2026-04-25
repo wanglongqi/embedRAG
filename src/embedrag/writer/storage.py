@@ -158,7 +158,7 @@ class WriterSQLitePool:
             )
             if emb_rows:
                 conn.executemany(
-                    "INSERT OR REPLACE INTO chunk_embeddings (chunk_id, space, embedding) VALUES (?, ?, ?)",
+                    "INSERT OR REPLACE INTO chunk_embeddings (chunk_id, space, embedding) " "VALUES (?, ?, ?)",
                     emb_rows,
                 )
             conn.commit()
@@ -230,7 +230,7 @@ class WriterSQLitePool:
     async def insert_closure_batch(self, relations: list[tuple[str, str, int]]) -> None:
         """Insert closure table entries: (ancestor_id, descendant_id, depth)."""
         async with self.write_conn() as conn:
-            sql = "INSERT OR IGNORE INTO chunk_closure (ancestor_id, descendant_id, depth) VALUES (?, ?, ?)"
+            sql = "INSERT OR IGNORE INTO chunk_closure (ancestor_id, descendant_id, depth) " "VALUES (?, ?, ?)"
             conn.executemany(sql, relations)
             conn.commit()
 
@@ -258,6 +258,81 @@ class WriterSQLitePool:
         async with self.read_conn() as conn:
             row = conn.execute("SELECT count(*) FROM documents").fetchone()
             return row[0]
+
+    async def get_per_space_vector_counts(self) -> dict[str, int]:
+        """Return {space: vector_count} for all embedding spaces."""
+        async with self.read_conn() as conn:
+            rows = conn.execute(
+                "SELECT space, count(*) AS cnt FROM chunk_embeddings GROUP BY space ORDER BY space"
+            ).fetchall()
+            return {r["space"]: r["cnt"] for r in rows}
+
+    async def list_documents(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        doc_type: str | None = None,
+        source: str | None = None,
+    ) -> tuple[list[dict], int]:
+        """Return paginated document list and total count matching the filters."""
+        async with self.read_conn() as conn:
+            where_parts: list[str] = []
+            params: list = []
+            if doc_type:
+                where_parts.append("doc_type = ?")
+                params.append(doc_type)
+            if source:
+                where_parts.append("source = ?")
+                params.append(source)
+            where_sql = (" WHERE " + " AND ".join(where_parts)) if where_parts else ""
+
+            total = conn.execute(f"SELECT count(*) FROM documents{where_sql}", params).fetchone()[0]
+
+            rows = conn.execute(
+                f"SELECT doc_id, title, source, doc_type, created_at "
+                f"FROM documents{where_sql} ORDER BY doc_id LIMIT ? OFFSET ?",
+                params + [limit, offset],
+            ).fetchall()
+
+            docs = [
+                {
+                    "doc_id": r["doc_id"],
+                    "title": r["title"],
+                    "source": r["source"],
+                    "doc_type": r["doc_type"],
+                    "created_at": r["created_at"],
+                }
+                for r in rows
+            ]
+            return docs, total
+
+    async def get_chunk_ids_for_doc(self, doc_id: str) -> list[str]:
+        """Return all chunk_ids belonging to a document, ordered by seq_in_parent."""
+        async with self.read_conn() as conn:
+            rows = conn.execute(
+                "SELECT chunk_id FROM chunks WHERE doc_id = ? ORDER BY level, seq_in_parent",
+                (doc_id,),
+            ).fetchall()
+            return [r["chunk_id"] for r in rows]
+
+    async def delete_documents_bulk(self, doc_ids: list[str]) -> tuple[int, int]:
+        """Delete multiple documents and their chunks. Returns (docs_deleted, chunks_deleted)."""
+        if not doc_ids:
+            return 0, 0
+        total_chunks = 0
+        for doc_id in doc_ids:
+            total_chunks += await self.delete_document(doc_id)
+        return len(doc_ids), total_chunks
+
+    async def get_doc_ids_by_type(self, doc_type: str) -> list[str]:
+        """Return all doc_ids matching a given doc_type."""
+        async with self.read_conn() as conn:
+            rows = conn.execute("SELECT doc_id FROM documents WHERE doc_type = ?", (doc_type,)).fetchall()
+            return [r["doc_id"] for r in rows]
+
+    def get_db_size_bytes(self) -> int:
+        """Return the on-disk size of the database file."""
+        return Path(self._db_path).stat().st_size
 
     async def delete_document(self, doc_id: str) -> int:
         """Delete a document and all its chunks. Returns chunks deleted."""

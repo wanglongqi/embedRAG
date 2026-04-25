@@ -15,11 +15,17 @@ from embedrag.models.api import (
     ArchiveResponse,
     BuildRequest,
     BuildResponse,
+    BulkDeleteRequest,
+    BulkDeleteResponse,
     DeleteDocumentResponse,
+    DocumentDetailResponse,
+    DocumentListResponse,
+    DocumentSummary,
     HealthResponse,
     IngestRequest,
     IngestResponse,
     PublishResponse,
+    StatsResponse,
 )
 from embedrag.models.chunk import ChunkNode, Document
 from embedrag.models.manifest import IndexInfo
@@ -45,6 +51,81 @@ async def health(request: Request) -> HealthResponse:
         node_type="writer",
         version=state.current_version,
     )
+
+
+@router.get("/stats")
+async def stats(request: Request) -> StatsResponse:
+    """Operational overview: doc/chunk/vector counts, spaces, version, DB size."""
+    state = _get_state(request)
+    doc_count = await state.db.get_doc_count()
+    chunk_count = await state.db.get_chunk_count()
+    spaces = await state.db.get_embedding_spaces()
+    vectors_per_space = await state.db.get_per_space_vector_counts()
+    return StatsResponse(
+        doc_count=doc_count,
+        chunk_count=chunk_count,
+        embedding_spaces=spaces,
+        vectors_per_space=vectors_per_space,
+        current_version=state.current_version,
+        db_size_bytes=state.db.get_db_size_bytes(),
+    )
+
+
+@router.get("/documents")
+async def list_documents(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    doc_type: str | None = None,
+    source: str | None = None,
+) -> DocumentListResponse:
+    """Paginated document listing with optional filters."""
+    state = _get_state(request)
+    limit = min(max(limit, 1), 200)
+    offset = max(offset, 0)
+    docs, total = await state.db.list_documents(limit, offset, doc_type, source)
+    return DocumentListResponse(
+        documents=[DocumentSummary(**d) for d in docs],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/documents/{doc_id}")
+async def get_document(request: Request, doc_id: str) -> DocumentDetailResponse:
+    """Return a single document with its metadata and chunk IDs."""
+    state = _get_state(request)
+    doc = await state.db.get_document(doc_id)
+    if not doc:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail=f"Document {doc_id!r} not found")
+    chunk_ids = await state.db.get_chunk_ids_for_doc(doc_id)
+    return DocumentDetailResponse(
+        doc_id=doc.doc_id,
+        title=doc.title,
+        source=doc.source,
+        doc_type=doc.doc_type,
+        metadata=doc.metadata,
+        chunk_ids=chunk_ids,
+    )
+
+
+@router.post("/documents/delete")
+async def bulk_delete_documents(request: Request, body: BulkDeleteRequest) -> BulkDeleteResponse:
+    """Delete multiple documents by ID list or by doc_type."""
+    state = _get_state(request)
+    doc_ids = list(body.doc_ids)
+    if body.doc_type:
+        type_ids = await state.db.get_doc_ids_by_type(body.doc_type)
+        doc_ids.extend(type_ids)
+    doc_ids = list(dict.fromkeys(doc_ids))
+    if not doc_ids:
+        return BulkDeleteResponse(deleted_docs=0, deleted_chunks=0)
+    deleted_docs, deleted_chunks = await state.db.delete_documents_bulk(doc_ids)
+    logger.info("bulk_delete", docs=deleted_docs, chunks=deleted_chunks)
+    return BulkDeleteResponse(deleted_docs=deleted_docs, deleted_chunks=deleted_chunks)
 
 
 @router.post("/ingest")
@@ -243,7 +324,9 @@ async def build_archive(request: Request, body: ArchiveRequest = ArchiveRequest(
 
     fmt = body.format.lower().lstrip(".")
     if fmt not in VALID_ARCHIVE_FORMATS:
-        raise ValueError(f"Unsupported format {body.format!r}. Choose from: {', '.join(sorted(VALID_ARCHIVE_FORMATS))}")
+        raise ValueError(
+            f"Unsupported format {body.format!r}. " f"Choose from: {', '.join(sorted(VALID_ARCHIVE_FORMATS))}"
+        )
 
     from embedrag.shared.archive import create_snapshot_archive
 
@@ -275,4 +358,43 @@ async def build_archive(request: Request, body: ArchiveRequest = ArchiveRequest(
         path=archive_path,
         size_bytes=size,
         build_time_seconds=round(elapsed, 2),
+    )
+
+
+@router.get("/build/archive/download")
+async def download_archive(request: Request, format: str = "tar.zst"):
+    """Stream the latest build archive as a file download.
+
+    Builds the archive on-the-fly if it doesn't already exist for the
+    requested format, then serves it via ``FileResponse``.
+    """
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+
+    from embedrag.shared.archive import create_snapshot_archive
+
+    state = _get_state(request)
+    if not state.current_version or not state.last_manifest:
+        raise HTTPException(status_code=404, detail="No build available. Run /build first.")
+
+    fmt = format.lower().lstrip(".")
+    if fmt not in VALID_ARCHIVE_FORMATS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported format {format!r}. Choose from: {', '.join(sorted(VALID_ARCHIVE_FORMATS))}",
+        )
+
+    ext = fmt if fmt != "tgz" else "tar.gz"
+    archive_name = f"{state.current_version}.{ext}"
+    archive_path = state.build_dir / archive_name
+
+    if not archive_path.exists():
+        snapshot_dir = str(state.build_dir / state.current_version)
+        create_snapshot_archive(snapshot_dir, str(archive_path), format=fmt)
+
+    media_type = "application/zstd" if "zst" in fmt else "application/gzip" if "gz" in fmt else "application/x-tar"
+    return FileResponse(
+        path=str(archive_path),
+        filename=archive_name,
+        media_type=media_type,
     )

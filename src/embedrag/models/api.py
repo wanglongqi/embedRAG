@@ -68,6 +68,49 @@ class DeleteDocumentResponse(BaseModel):
     chunks_deleted: int
 
 
+class StatsResponse(BaseModel):
+    doc_count: int
+    chunk_count: int
+    embedding_spaces: list[str]
+    vectors_per_space: dict[str, int]
+    current_version: str
+    db_size_bytes: int
+
+
+class DocumentSummary(BaseModel):
+    doc_id: str
+    title: str
+    source: str
+    doc_type: str
+    created_at: str
+
+
+class DocumentListResponse(BaseModel):
+    documents: list[DocumentSummary]
+    total: int
+    limit: int
+    offset: int
+
+
+class DocumentDetailResponse(BaseModel):
+    doc_id: str
+    title: str
+    source: str
+    doc_type: str
+    metadata: dict
+    chunk_ids: list[str]
+
+
+class BulkDeleteRequest(BaseModel):
+    doc_ids: list[str] = Field(default_factory=list)
+    doc_type: str = ""
+
+
+class BulkDeleteResponse(BaseModel):
+    deleted_docs: int
+    deleted_chunks: int
+
+
 # ── Rerank proxy model ──
 
 

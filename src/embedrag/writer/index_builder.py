@@ -43,9 +43,10 @@ class IndexBuilder:
             (IndexInfo, id_map_path) tuple.
         """
         n_vectors = len(chunk_ids)
-        assert embeddings.shape == (n_vectors, self._dim), (
-            f"Shape mismatch: {embeddings.shape} vs ({n_vectors}, {self._dim})"
-        )
+        assert embeddings.shape == (
+            n_vectors,
+            self._dim,
+        ), f"Shape mismatch: {embeddings.shape} vs ({n_vectors}, {self._dim})"
 
         output = Path(output_dir) / "index" / space
         output.mkdir(parents=True, exist_ok=True)

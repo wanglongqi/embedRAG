@@ -191,7 +191,7 @@ def _rebuild_fts_with_norm(conn: sqlite3.Connection) -> None:
                 )
             )
         conn.executemany(
-            "INSERT INTO chunks_fts (chunk_id, text, text_norm, title, title_norm, tags) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO chunks_fts (chunk_id, text, text_norm, title, title_norm, tags) " "VALUES (?, ?, ?, ?, ?, ?)",
             fts_rows,
         )
     logger.info("fts_rebuilt_with_norm", rows=len(rows) if rows else 0)
@@ -215,7 +215,7 @@ def _add_chunk_embeddings(conn: sqlite3.Connection) -> None:
         rows = conn.execute("SELECT chunk_id, embedding FROM chunks WHERE embedding IS NOT NULL").fetchall()
         if rows:
             conn.executemany(
-                "INSERT OR REPLACE INTO chunk_embeddings (chunk_id, space, embedding) VALUES (?, 'text', ?)",
+                "INSERT OR REPLACE INTO chunk_embeddings (chunk_id, space, embedding) " "VALUES (?, 'text', ?)",
                 [(r[0], r[1]) for r in rows],
             )
             migrated = len(rows)

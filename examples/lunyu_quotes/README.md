@@ -7,7 +7,8 @@ Individual quotes from the **论语** (Analects of Confucius), each treated as a
 - **Chunking**: `plain` -- each quote is short enough to be a single chunk. No splitting, no hierarchy.
 - **No hierarchy expansion**: `enable_hierarchy_expand: false`, `context_depth: 0` in query config.
 - **1 doc = 1 chunk**: Each numbered saying (e.g. "一之一") becomes one document with one chunk.
-- **1 FAISS shard**: Small dataset (~500 quotes) needs only one shard.
+- **1 FAISS shard**: Small dataset (~501 quotes) needs only one shard.
+- **Embeddings**: 1024-dim via `text-embedding-qwen3-embedding-0.6b`.
 
 ## Quick Start
 
@@ -28,6 +29,8 @@ curl -X POST http://localhost:8000/search/text \
 ```
 
 ### Option B: Build from scratch
+
+Requires an OpenAI-compatible embedding service (see `writer.yaml`).
 
 ```bash
 # 1. Start writer

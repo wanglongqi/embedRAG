@@ -9,6 +9,7 @@ from embedrag.models.manifest import Manifest
 from embedrag.query.lifecycle.startup import load_generation, quick_verify_snapshot
 from embedrag.shared.disk import check_disk_space
 from embedrag.shared.object_store import ObjectStoreClient
+from embedrag.shared.snapshot_client import SnapshotClient
 
 logger = get_logger(__name__)
 
@@ -62,21 +63,54 @@ async def bootstrap_query_node(state) -> None:
                 f"failed integrity check. Delete or re-download it."
             )
 
-    # No local snapshot -- try cold start from object store
-    logger.info("bootstrap_cold_start", data_dir=str(active_dir))
+    # No local snapshot -- try cold start from configured source
+    source = config.sync.source
+    logger.info("bootstrap_cold_start", source=source, data_dir=str(active_dir))
+
     try:
-        client = ObjectStoreClient(config.object_store)
-        version = _resolve_version(client, config.snapshot.bootstrap_version)
-        if not version:
-            raise BootstrapError(
-                "No snapshot version found in object store (latest.json missing or empty). "
-                "Publish a snapshot first or place one locally."
-            )
+        if source == "http":
+            url = config.sync.http_url
+            if not url:
+                raise BootstrapError("Sync source is HTTP but sync.http_url is empty")
 
-        snap_dir = str(staging_dir / version)
-        await _download_snapshot(client, version, snap_dir, config)
+            from embedrag.shared.archive import is_archive_url
 
-        manifest = Manifest.load(Path(snap_dir) / "manifest.json")
+            if is_archive_url(url):
+                from embedrag.shared.archive import (
+                    download_and_extract_archive,
+                    verify_archive_snapshot,
+                )
+
+                temp_extract = str(staging_dir / "bootstrap_archive")
+                snap_dir = download_and_extract_archive(url, temp_extract, timeout=config.sync.download_timeout_seconds)
+                manifest = verify_archive_snapshot(snap_dir)
+                version = manifest.snapshot_version
+            else:
+                from embedrag.shared.http_snapshot_client import HttpSnapshotClient
+
+                h_client = HttpSnapshotClient(url, timeout=config.sync.download_timeout_seconds)
+                v = _resolve_version(h_client, config.snapshot.bootstrap_version)
+                if not v:
+                    raise BootstrapError(f"No snapshot version found at {url}/latest.json")
+                version = v
+                snap_dir = str(staging_dir / version)
+                await _download_snapshot(h_client, version, snap_dir, config)
+                manifest = Manifest.load(Path(snap_dir) / "manifest.json")
+        else:
+            o_client = ObjectStoreClient(config.object_store)
+            v = _resolve_version(o_client, config.snapshot.bootstrap_version)
+            if not v:
+                raise BootstrapError(
+                    "No snapshot version found in object store (latest.json missing or empty). "
+                    "Publish a snapshot first or place one locally."
+                )
+            version = v
+            snap_dir = str(staging_dir / version)
+            await _download_snapshot(o_client, version, snap_dir, config)
+            manifest = Manifest.load(Path(snap_dir) / "manifest.json")
+
+        if not manifest:
+            raise BootstrapError("Failed to load manifest during bootstrap")
 
         # Move to active
         target = active_dir / version
@@ -101,7 +135,7 @@ async def bootstrap_query_node(state) -> None:
         raise BootstrapError(
             f"Failed to bootstrap: {exc}\n"
             f"  Hint: place a snapshot at {active_dir}/<version>/manifest.json "
-            f"or configure a valid object_store."
+            f"or configure a valid sync source (HTTP/ObjectStore)."
         ) from exc
 
 
@@ -114,7 +148,7 @@ def _find_active_manifest(active_dir: Path) -> Path | None:
     return manifests[0]
 
 
-def _resolve_version(client: ObjectStoreClient, bootstrap_version: str) -> str | None:
+def _resolve_version(client: SnapshotClient, bootstrap_version: str) -> str | None:
     if bootstrap_version == "latest":
         latest = client.get_json("latest.json")
         if latest:
@@ -123,7 +157,7 @@ def _resolve_version(client: ObjectStoreClient, bootstrap_version: str) -> str |
     return bootstrap_version
 
 
-async def _download_snapshot(client: ObjectStoreClient, version: str, snap_dir: str, config) -> None:
+async def _download_snapshot(client: SnapshotClient, version: str, snap_dir: str, config) -> None:
     """Download a full snapshot from object store."""
     Path(snap_dir).mkdir(parents=True, exist_ok=True)
 

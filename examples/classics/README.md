@@ -4,7 +4,7 @@ Combined indexing of **论语** (20 chapters) and **庄子** (33 chapters) into 
 
 ## Stats
 
-- 53 documents, 261 chunks, 2 FAISS shards
+- 53 documents, 261 chunks, 1024-dim embeddings (`text-embedding-qwen3-embedding-0.6b`), 2 FAISS shards
 - Chunking strategy: `paragraph`
 
 ## Design Choices
@@ -30,6 +30,8 @@ curl -X POST http://localhost:8000/search/text \
 ```
 
 ### Option B: Build from scratch
+
+Requires an OpenAI-compatible embedding service (see `writer.yaml`).
 
 ```bash
 # 1. Start writer

@@ -126,7 +126,7 @@ def main():
             total_chunks += result["chunk_count"]
             elapsed = time.time() - t_batch
             if (i // args.batch_size) % 20 == 0 or i + args.batch_size >= len(poems):
-                msg = f"OK ({result['ingested']} docs, {result['chunk_count']} chunks, {elapsed:.1f}s)"
+                msg = f"OK ({result['ingested']} docs, " f"{result['chunk_count']} chunks, {elapsed:.1f}s)"
                 print(msg)
         except Exception as e:
             print(f"FAILED at {desc}: {e}")
