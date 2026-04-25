@@ -20,10 +20,10 @@ from embedrag.models.api import (
     PublishResponse,
 )
 from embedrag.models.chunk import ChunkNode, Document
+from embedrag.models.manifest import IndexInfo
 from embedrag.shared.object_store import ObjectStoreClient
 from embedrag.writer.chunking.hierarchy import build_closure_entries
 from embedrag.writer.chunking.splitter import split_document
-from embedrag.models.manifest import IndexInfo
 from embedrag.writer.index_builder import IndexBuilder
 from embedrag.writer.snapshot import SnapshotPackager, SnapshotPublisher
 
