@@ -143,11 +143,8 @@ def _extract_to(archive_path: Path, output: Path) -> str:
     if not root.exists():
         raise ValueError("No manifest.json found after extraction")
 
+    logger.info("archive_extracted", snapshot_dir=str(root))
     return str(root)
-
-    snap_dir = _find_snapshot_root(output)
-    logger.info("archive_extracted", snapshot_dir=str(snap_dir))
-    return str(snap_dir)
 
 
 def verify_archive_snapshot(snapshot_dir: str) -> Manifest:

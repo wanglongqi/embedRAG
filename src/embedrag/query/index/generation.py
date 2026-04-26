@@ -101,6 +101,8 @@ class GenerationManager:
         2. Wait for all in-flight queries on old generation to complete.
         3. Close old generation.
         """
+        from embedrag.shared.metrics import ACTIVE_GENERATION, INDEX_VECTOR_COUNT
+
         async with self._lock:
             old_ctx = self._active
             self._active = new_ctx
@@ -109,6 +111,11 @@ class GenerationManager:
                 old=old_ctx.version if old_ctx else "none",
                 new=new_ctx.version,
             )
+
+            version_digits = "".join(c for c in new_ctx.version if c.isdigit())
+            ACTIVE_GENERATION.set(int(version_digits) if version_digits else 0)
+            total_vectors = sum(sm.total_vectors for sm in new_ctx.shard_managers.values())
+            INDEX_VECTOR_COUNT.set(total_vectors)
 
             if old_ctx:
                 await self._drain_event.wait()

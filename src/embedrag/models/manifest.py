@@ -83,6 +83,19 @@ class Manifest:
             files.append(idm.compressed_file or idm.file)
         return files
 
+    def get_file_entry_by_raw(self, raw_path: str) -> FileEntry | ShardEntry | None:
+        """Look up a file entry by its uncompressed (raw) file path."""
+        for idx_info in self.indexes.values():
+            for shard in idx_info.shards:
+                if shard.file == raw_path:
+                    return shard
+        if self.db.file == raw_path:
+            return self.db
+        for idm in self.id_maps.values():
+            if idm.file == raw_path:
+                return idm
+        return None
+
     def get_file_entry_by_compressed(self, compressed_path: str) -> FileEntry | ShardEntry | None:
         for idx_info in self.indexes.values():
             for shard in idx_info.shards:

@@ -38,6 +38,7 @@ from embedrag.query.retrieval.fusion import rrf_fuse
 from embedrag.query.retrieval.hierarchy_expand import HierarchyExpander
 from embedrag.query.retrieval.sparse import SparseResult, SparseRetriever
 from embedrag.shared.metrics import (
+    ACTIVE_QUERIES,
     DENSE_LATENCY,
     HOTFIX_BUFFER_SIZE,
     SEARCH_COUNT,
@@ -180,34 +181,40 @@ async def _run_search_pipeline(
 @router.post("/search")
 async def search(request: Request, body: SearchRequest) -> SearchResponse:
     state = _get_state(request)
+    ACTIVE_QUERIES.inc()
     t_total = time.monotonic()
+    try:
+        query_vec = np.array(body.query_embedding, dtype=np.float32)
+        chunks, score_type, dense_ms, sparse_ms, fusion_ms, _ = await _run_search_pipeline(
+            state,
+            query_vec,
+            body.query_text,
+            body.top_k,
+            body.filters,
+            body.expand_context,
+            body.context_depth,
+            space=body.space,
+        )
 
-    query_vec = np.array(body.query_embedding, dtype=np.float32)
-    chunks, score_type, dense_ms, sparse_ms, fusion_ms, _ = await _run_search_pipeline(
-        state,
-        query_vec,
-        body.query_text,
-        body.top_k,
-        body.filters,
-        body.expand_context,
-        body.context_depth,
-        space=body.space,
-    )
-
-    total_ms = (time.monotonic() - t_total) * 1000
-    SEARCH_LATENCY.observe(total_ms / 1000)
-    DENSE_LATENCY.observe(dense_ms / 1000)
-    SPARSE_LATENCY.observe(sparse_ms / 1000)
-    SEARCH_COUNT.labels(status="success").inc()
-    return SearchResponse(
-        chunks=chunks,
-        total=len(chunks),
-        score_type=score_type,
-        dense_time_ms=round(dense_ms, 2),
-        sparse_time_ms=round(sparse_ms, 2),
-        fusion_time_ms=round(fusion_ms, 2),
-        total_time_ms=round(total_ms, 2),
-    )
+        total_ms = (time.monotonic() - t_total) * 1000
+        SEARCH_LATENCY.observe(total_ms / 1000)
+        DENSE_LATENCY.observe(dense_ms / 1000)
+        SPARSE_LATENCY.observe(sparse_ms / 1000)
+        SEARCH_COUNT.labels(status="success").inc()
+        return SearchResponse(
+            chunks=chunks,
+            total=len(chunks),
+            score_type=score_type,
+            dense_time_ms=round(dense_ms, 2),
+            sparse_time_ms=round(sparse_ms, 2),
+            fusion_time_ms=round(fusion_ms, 2),
+            total_time_ms=round(total_ms, 2),
+        )
+    except Exception:
+        SEARCH_COUNT.labels(status="error").inc()
+        raise
+    finally:
+        ACTIVE_QUERIES.dec()
 
 
 @router.post("/search/text")
@@ -218,44 +225,50 @@ async def search_text(request: Request, body: TextSearchRequest) -> SearchRespon
     Set mode to "hybrid" (default), "dense", or "sparse".
     """
     state = _get_state(request)
+    ACTIVE_QUERIES.inc()
     t_total = time.monotonic()
+    try:
+        embed_ms = 0.0
+        query_vec = np.zeros(0, dtype=np.float32)
+        if body.mode != "sparse":
+            t_emb = time.monotonic()
+            embed_client = state.get_embedding_client(body.space)
+            vectors = await embed_client.embed_texts([body.query_text])
+            query_vec = vectors[0]
+            embed_ms = (time.monotonic() - t_emb) * 1000
 
-    embed_ms = 0.0
-    query_vec = np.zeros(0, dtype=np.float32)
-    if body.mode != "sparse":
-        t_emb = time.monotonic()
-        embed_client = state.get_embedding_client(body.space)
-        vectors = await embed_client.embed_texts([body.query_text])
-        query_vec = vectors[0]
-        embed_ms = (time.monotonic() - t_emb) * 1000
+        chunks, score_type, dense_ms, sparse_ms, fusion_ms, _ = await _run_search_pipeline(
+            state,
+            query_vec,
+            body.query_text,
+            body.top_k,
+            body.filters,
+            body.expand_context,
+            body.context_depth,
+            mode=body.mode,
+            space=body.space,
+        )
 
-    chunks, score_type, dense_ms, sparse_ms, fusion_ms, _ = await _run_search_pipeline(
-        state,
-        query_vec,
-        body.query_text,
-        body.top_k,
-        body.filters,
-        body.expand_context,
-        body.context_depth,
-        mode=body.mode,
-        space=body.space,
-    )
-
-    total_ms = (time.monotonic() - t_total) * 1000
-    SEARCH_LATENCY.observe(total_ms / 1000)
-    DENSE_LATENCY.observe(dense_ms / 1000)
-    SPARSE_LATENCY.observe(sparse_ms / 1000)
-    SEARCH_COUNT.labels(status="success").inc()
-    return SearchResponse(
-        chunks=chunks,
-        total=len(chunks),
-        score_type=score_type,
-        embedding_time_ms=round(embed_ms, 2),
-        dense_time_ms=round(dense_ms, 2),
-        sparse_time_ms=round(sparse_ms, 2),
-        fusion_time_ms=round(fusion_ms, 2),
-        total_time_ms=round(total_ms, 2),
-    )
+        total_ms = (time.monotonic() - t_total) * 1000
+        SEARCH_LATENCY.observe(total_ms / 1000)
+        DENSE_LATENCY.observe(dense_ms / 1000)
+        SPARSE_LATENCY.observe(sparse_ms / 1000)
+        SEARCH_COUNT.labels(status="success").inc()
+        return SearchResponse(
+            chunks=chunks,
+            total=len(chunks),
+            score_type=score_type,
+            embedding_time_ms=round(embed_ms, 2),
+            dense_time_ms=round(dense_ms, 2),
+            sparse_time_ms=round(sparse_ms, 2),
+            fusion_time_ms=round(fusion_ms, 2),
+            total_time_ms=round(total_ms, 2),
+        )
+    except Exception:
+        SEARCH_COUNT.labels(status="error").inc()
+        raise
+    finally:
+        ACTIVE_QUERIES.dec()
 
 
 @router.post("/search/multi")
@@ -814,13 +827,23 @@ async def upload_snapshot(request: Request, file: UploadFile = File(...)) -> dic
     if not data_dir:
         raise HTTPException(status_code=500, detail="data_dir not configured")
 
+    max_upload_bytes = 2 * 1024 * 1024 * 1024  # 2 GB
     staging = Path(data_dir) / "uploads"
     staging.mkdir(parents=True, exist_ok=True)
 
     try:
         upload_path = staging / filename
+        bytes_written = 0
         with open(upload_path, "wb") as f:
-            shutil.copyfileobj(file.file, f)
+            while chunk := await file.read(256 * 1024):
+                bytes_written += len(chunk)
+                if bytes_written > max_upload_bytes:
+                    upload_path.unlink(missing_ok=True)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Upload exceeds {max_upload_bytes // (1024**3)}GB limit",
+                    )
+                f.write(chunk)
 
         logger.info("upload_received", filename=filename, size=upload_path.stat().st_size)
 
@@ -904,9 +927,28 @@ async def rerank_proxy(req: RerankRequest) -> RerankResponse:
     if not req.texts:
         return RerankResponse(results=[], elapsed_ms=0)
 
+    # Determine base URL vs explicit path.
+    # If the user provided a path containing /v1/ (e.g. /v1/embeddings, /v1/rerank),
+    # use it directly for that endpoint and derive the other from the base.
+    # Otherwise treat as a base URL and append /v1/rerank and /v1/embeddings.
+    url_stripped = url.rstrip("/")
+    from urllib.parse import urlparse, urlunparse
+
+    parsed = urlparse(url_stripped)
+    base_url = urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
+
+    if "/v1/rerank" in parsed.path:
+        rerank_url = url_stripped
+        embed_url = base_url + "/v1/embeddings"
+    elif "/v1/" in parsed.path:
+        embed_url = url_stripped
+        rerank_url = base_url + "/v1/rerank"
+    else:
+        rerank_url = url_stripped + "/v1/rerank"
+        embed_url = url_stripped + "/v1/embeddings"
+
     t0 = time.monotonic()
     async with httpx.AsyncClient(timeout=120) as client:
-        rerank_url = url.rstrip("/") + "/v1/rerank"
         try:
             resp = await client.post(
                 rerank_url,
@@ -924,12 +966,12 @@ async def rerank_proxy(req: RerankRequest) -> RerankResponse:
             pass
 
         all_inputs = [req.query] + req.texts
-        embed_url = url.rstrip("/") + "/v1/embeddings"
         resp = await client.post(embed_url, json={"model": model, "input": all_inputs})
-    if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"Reranker returned {resp.status_code}: {resp.text[:300]}")
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Reranker returned {resp.status_code}: {resp.text[:300]}")
 
-    data = resp.json()["data"]
+        data = resp.json()["data"]
+
     data.sort(key=lambda x: x["index"])
     query_emb = data[0]["embedding"]
 

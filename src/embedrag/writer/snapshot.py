@@ -130,7 +130,7 @@ class SnapshotPackager:
             unchanged, changed = [], []
             for path, hash_val in all_files.items():
                 prev_hash = getattr(
-                    previous_manifest.get_file_entry_by_compressed(path),
+                    previous_manifest.get_file_entry_by_raw(path),
                     "sha256_raw",
                     "",
                 )
