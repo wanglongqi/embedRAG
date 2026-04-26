@@ -949,22 +949,34 @@ async def rerank_proxy(req: RerankRequest) -> RerankResponse:
 
     t0 = time.monotonic()
     async with httpx.AsyncClient(timeout=120) as client:
+        # Try native rerank first
+        # NOTE: LM Studio returns HTTP 200 but with error body for unsupported endpoints
+        # We need to check for both success status AND valid response format
         try:
             resp = await client.post(
                 rerank_url,
                 json={"model": model, "query": req.query, "documents": req.texts, "top_n": len(req.texts)},
             )
+            # Check for successful response with actual rerank data (not error message)
             if resp.status_code == 200:
                 data = resp.json()
-                results = []
-                for item in data.get("results", []):
-                    results.append(RerankResult(index=item["index"], score=item.get("relevance_score", 0.0)))
-                results.sort(key=lambda r: -r.score)
-                elapsed = (time.monotonic() - t0) * 1000
-                return RerankResponse(results=results, elapsed_ms=elapsed)
+                # Check if response contains error (LM Studio pattern)
+                if "error" in data:
+                    # Got error response, fall through to fallback
+                    pass
+                elif "results" in data:
+                    # Valid rerank response
+                    results = []
+                    for item in data.get("results", []):
+                        results.append(RerankResult(index=item["index"], score=item.get("relevance_score", 0.0)))
+                    results.sort(key=lambda r: -r.score)
+                    elapsed = (time.monotonic() - t0) * 1000
+                    return RerankResponse(results=results, elapsed_ms=elapsed)
+                # No results, fall through to fallback
         except httpx.HTTPError:
             pass
 
+        # Fallback: use embedding with cosine similarity
         all_inputs = [req.query] + req.texts
         resp = await client.post(embed_url, json={"model": model, "input": all_inputs})
         if resp.status_code != 200:
