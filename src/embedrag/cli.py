@@ -59,15 +59,21 @@ def main() -> None:
     import uvicorn
 
     if args.command == "writer":
+        from embedrag.config import load_writer_config
         from embedrag.writer.app import create_writer_app
 
+        writer_config = load_writer_config(args.config)
         app = create_writer_app(config_path=args.config)
-        uvicorn.run(app, host=args.host, port=args.port)
+        port = args.port if args.port != 8001 else (writer_config.server.port or 8001)
+        uvicorn.run(app, host=args.host, port=port)
     elif args.command == "query":
+        from embedrag.config import load_query_config
         from embedrag.query.app import create_query_app
 
+        query_config = load_query_config(args.config)
         app = create_query_app(config_path=args.config)
-        uvicorn.run(app, host=args.host, port=args.port)
+        port = args.port if args.port != 8000 else (query_config.server.port or 8000)
+        uvicorn.run(app, host=args.host, port=port)
 
 
 def _run_pull(url: str, output: str = "./snapshot/active", timeout: int = 600) -> None:

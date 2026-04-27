@@ -84,8 +84,17 @@ def _create_tar_zst(snap: Path, output: Path, level: int) -> None:
 
 def is_archive_url(url: str) -> bool:
     """True if the URL points to a downloadable archive rather than a snapshot base URL."""
-    path = url.split("?")[0].split("#")[0].lower()
-    return any(path.endswith(ext) for ext in ARCHIVE_EXTENSIONS)
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    path = parsed.path.lower()
+    query = parsed.query.lower()
+    if any(path.endswith(ext) for ext in ARCHIVE_EXTENSIONS):
+        return True
+    for ext in ARCHIVE_EXTENSIONS:
+        if ext.lstrip(".") in query:
+            return True
+    return False
 
 
 def download_and_extract_archive(

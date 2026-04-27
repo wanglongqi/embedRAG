@@ -102,6 +102,7 @@ class NodeConfig(BaseModel):
     role: Literal["query", "writer"] = "query"
     node_id: str = "auto"
     data_dir: str = "/data/embedrag"
+    port: int = 0
 
     @model_validator(mode="after")
     def _auto_node_id(self) -> NodeConfig:

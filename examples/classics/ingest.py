@@ -4,7 +4,7 @@ Demonstrates reading from multiple data directories into one unified index.
 Each source gets a distinct doc_type so they can be filtered at query time.
 
 Usage:
-    python examples/classics/ingest.py [--writer-url http://localhost:8001]
+    python examples/classics/ingest.py [--writer-url http://localhost:8008]
 """
 
 import argparse
@@ -24,8 +24,7 @@ SOURCES = [
         "author": "孔子及弟子",
         "doc_type": "classic_lunyu",
         "doc_prefix": "lunyu",
-        "chunking": "paragraph",
-        "title_pattern": re.compile(r"^(.+第[一二三四五六七八九十百]+)$"),
+        "special_handling": "lunyu",
     },
     {
         "data_dir": PROJECT_ROOT / "data" / "zhuangzi",
@@ -42,6 +41,8 @@ NOISE_LINES = {
     "姊妹计划: 数据项",
     "註疏",
     "返回頁首",
+    "↑返回頂部",
+    "↑返回顶部",
     "Public domainPublic domainfalsefalse",
 }
 
@@ -80,9 +81,38 @@ def extract_title(text: str, pattern: re.Pattern, chapter_num: int, book: str) -
     return f"{book} 第{chapter_num}章"
 
 
+def preprocess_lunyu(text: str) -> list[tuple[str, str]]:
+    """Split Lunyu into individual sayings (label, content).
+    Returns a list of (label, content) tuples.
+    """
+    lines = text.split("\n")
+    sayings = []
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        # Match pattern like "一之一" or "二十之十五"
+        if re.match(r"^[一二三四五六七八九十百]+之[一二三四五六七八九十百]+$", line):
+            label = line
+            i += 1
+            # Find all subsequent lines until the next label
+            content_lines = []
+            while i < len(lines):
+                next_line = lines[i].strip()
+                if re.match(r"^[一二三四五六七八九十百]+之[一二三四五六七八九十百]+$", next_line):
+                    break
+                if next_line:
+                    content_lines.append(next_line)
+                i += 1
+            if content_lines:
+                sayings.append((label, " ".join(content_lines)))
+        else:
+            i += 1
+    return sayings
+
+
 def main():
     parser = argparse.ArgumentParser(description="Ingest 论语+庄子 into EmbedRAG")
-    parser.add_argument("--writer-url", default="http://localhost:8001")
+    parser.add_argument("--writer-url", default="http://localhost:8008")
     parser.add_argument("--batch-size", type=int, default=10)
     args = parser.parse_args()
 
@@ -112,23 +142,44 @@ def main():
             chapter_num = int(fpath.stem.split("_")[1])
             raw = fpath.read_text(encoding="utf-8")
             text = clean_text(raw)
-            title = extract_title(text, src["title_pattern"], chapter_num, src["book"])
 
-            documents.append(
-                {
-                    "doc_id": f"{src['doc_prefix']}_ch{chapter_num:03d}",
-                    "title": title,
-                    "text": text,
-                    "doc_type": src["doc_type"],
-                    "chunking": src["chunking"],
-                    "source": src["book"],
-                    "metadata": {
-                        "book": src["book"],
-                        "author": src["author"],
-                        "chapter": chapter_num,
-                    },
-                }
-            )
+            if src.get("special_handling") == "lunyu":
+                sayings = preprocess_lunyu(text)
+                for s_idx, (label, content) in enumerate(sayings):
+                    documents.append(
+                        {
+                            "doc_id": f"{src['doc_prefix']}_ch{chapter_num:03d}_{s_idx:03d}",
+                            "title": f"{src['book']} {label}",
+                            "text": content,  # Label is structural data, keep out of text
+                            "doc_type": src["doc_type"],
+                            "chunking": "paragraph",
+                            "chunk_size": 1000,  # Each saying is its own chunk
+                            "source": src["book"],
+                            "metadata": {
+                                "book": src["book"],
+                                "author": src["author"],
+                                "chapter": chapter_num,
+                                "section": label,
+                            },
+                        }
+                    )
+            else:
+                title = extract_title(text, src["title_pattern"], chapter_num, src["book"])
+                documents.append(
+                    {
+                        "doc_id": f"{src['doc_prefix']}_ch{chapter_num:03d}",
+                        "title": title,
+                        "text": text,
+                        "doc_type": src["doc_type"],
+                        "chunking": src["chunking"],
+                        "source": src["book"],
+                        "metadata": {
+                            "book": src["book"],
+                            "author": src["author"],
+                            "chapter": chapter_num,
+                        },
+                    }
+                )
 
         for i in range(0, len(documents), args.batch_size):
             batch = documents[i : i + args.batch_size]
