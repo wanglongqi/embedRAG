@@ -35,6 +35,15 @@ hotfix:
   enabled: true
   max_vectors: 10000
 
+sync:
+  enabled: false                  # set to true to activate background sync
+  source: object_store            # "object_store" or "http"
+  http_url: ""                    # base URL when source=http
+  cron: ""                        # 5-field cron expression (e.g. "0 */2 * * *")
+  poll_interval_seconds: 300      # fallback interval when cron is empty
+  download_concurrency: 4         # parallel file downloads
+  download_timeout_seconds: 600   # per-download timeout
+
 embedding:
   service_url: http://embedding-service:8080/embed
   api_format: embedrag        # "embedrag" or "openai"

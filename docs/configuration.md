@@ -175,7 +175,7 @@ snapshot:
 
 ### sync
 
-Controls background snapshot synchronization.  When enabled, the query node
+Controls background snapshot synchronization. When enabled, the query node
 periodically checks a remote source for new snapshot versions and hot-swaps
 automatically.
 
@@ -185,7 +185,7 @@ sync:
   source: object_store            # "object_store" or "http"
   http_url: ""                    # base URL when source=http
   cron: ""                        # 5-field cron expression (e.g. "0 */2 * * *")
-  poll_interval_seconds: 300      # fallback interval when cron is empty
+  poll_interval_seconds: 300      # interval between checks when cron is empty
   download_concurrency: 4         # parallel file downloads
   download_timeout_seconds: 600   # per-download timeout
 ```
@@ -197,10 +197,13 @@ sync:
 | `object_store` | Uses the `object_store` config section (S3/MinIO/TOS) |
 | `http` | Downloads from `sync.http_url` (any HTTP/HTTPS static file server or CDN) |
 
-**Scheduling:** If `cron` is set (e.g. `"*/10 * * * *"` for every 10 minutes),
-it takes priority over `poll_interval_seconds`.  Uses the `croniter` library.
+**Scheduling behavior:**
 
-**Manual trigger:** `POST /admin/sync` triggers a one-off sync.  Pass
+- When `cron` is **empty** (default): Uses fixed interval polling every `poll_interval_seconds`
+- When `cron` is **set**: Uses cron-based scheduling (takes priority over `poll_interval_seconds`)
+- The `croniter` library is used for cron expression parsing
+
+**Manual trigger:** `POST /admin/sync` triggers a one-off sync. Pass
 `{"source_url": "https://..."}` to sync from an arbitrary URL regardless of
 the configured source.
 
