@@ -182,4 +182,9 @@ scrape_configs:
 | SQLite read-only | 64MB page cache per pool |
 | Hotfix buffer | ~40MB for 10K vectors at dim=1024 |
 | Python + FastAPI | ~200MB baseline |
-| **Total RSS** | **~500MB** (rest available for OS page cache) |
+## Next Steps
+
+- [Configuration Reference](configuration.md) - Full YAML settings guide.
+- [Integration Guide](integration.md) - How to call EmbedRAG from your applications.
+- [Multi-Modal RAG](multi-modal.md) - Managing non-text assets.
+- [API Reference](api.md) - Code-level documentation.

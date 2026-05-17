@@ -276,4 +276,9 @@ object_store:
   access_key_env: MY_CUSTOM_KEY  # reads os.environ["MY_CUSTOM_KEY"]
 ```
 
-This pattern keeps secrets out of config files while remaining flexible across environments.
+## Next Steps
+
+- [Operations Guide](operations.md) - Learn how to run and manage EmbedRAG nodes.
+- [Embedding Setup](embedding.md) - Details on configuring external embedding services.
+- [Multi-Modal RAG](multi-modal.md) - Architecture for text, image, and other modalities.
+- [API Reference](api.md) - Automatically generated code documentation.

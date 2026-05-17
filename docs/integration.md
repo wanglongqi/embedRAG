@@ -366,4 +366,8 @@ Common endpoints you will call from integrations. Full list in `GET /openapi.jso
 | `GET`  | `/openapi.json` | Machine-readable API spec |
 | `GET`  | `/docs` | Interactive Swagger UI |
 
-Endpoints under `/admin/*` (sync trigger, hotfix, reload) are for operators — never expose them to untrusted callers.
+## Next Steps
+
+- [Embedding Guide](embedding.md) - For in-process or sidecar deployment patterns.
+- [Configuration Reference](configuration.md) - Query node search settings.
+- [Operations Guide](operations.md) - Health checks and snapshot management.

@@ -625,4 +625,8 @@ A1, A2, and A3 are the container-free answers to "deploy EmbedRAG straight onto 
 | EmbedRAG restarts in a loop | Usually a config or integrity error — scroll up in `journalctl` / Pod logs; the startup path prints a framed `STARTUP FAILED:` block before exiting |
 | Disk fills up | `sync.download_concurrency` too high or failed extractions left behind; clean `staging/` and check `data_dir` disk budget |
 
-The query node ships with a WebUI at `/ui/` — open `http://127.0.0.1:8800/ui/` from a jump host or via port-forward for a visual dashboard covering Search, Debug, and Status (including live sync status and manual triggers).
+## Next Steps
+
+- [Integration Guide](integration.md) - For network-based service integration.
+- [Configuration Reference](configuration.md) - Full YAML settings for the query node.
+- [Operations Guide](operations.md) - Managing the deployment lifecycle.

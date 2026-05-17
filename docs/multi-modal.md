@@ -283,3 +283,9 @@ The Search and Debug tabs include a **space selector** dropdown populated from `
 - No need for a shared embedding space or dimension alignment
 - Simple to reason about: each space returns ranked results, then they're merged
 - RRF is proven effective for combining heterogeneous rankers
+
+## Next Steps
+
+- [Configuration Reference](configuration.md) - YAML settings for multi-space embedding.
+- [Embedding Setup](embedding.md) - In-process vs networked deployments.
+- [Operations Guide](operations.md) - Monitoring and snapshot lifecycle.
