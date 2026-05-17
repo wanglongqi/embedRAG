@@ -49,6 +49,13 @@ markdown_extensions:
   - toc:
       permalink: true
 
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+
 nav:
   - Home: index.md
   - Configuration: configuration.md
