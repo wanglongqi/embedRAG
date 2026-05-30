@@ -1,4 +1,10 @@
-"""Query node middleware: request ID injection, timing, error handling."""
+"""FastAPI middleware for request observability on the query node.
+
+``RequestContextMiddleware`` injects a unique request ID into structlog
+context, logs request start/end with timing and status code, and attaches
+the request ID to the response ``X-Request-ID`` header for distributed
+tracing correlation.
+"""
 
 from __future__ import annotations
 

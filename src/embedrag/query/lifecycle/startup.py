@@ -1,4 +1,12 @@
-"""Startup precheck and snapshot loading for the query node."""
+"""Startup prechecks and snapshot loading for the query node.
+
+Contains ``load_generation()`` which decompresses snapshot artifacts, loads
+FAISS shards into memory with staged budget checks, opens read-only SQLite
+connections, and assembles a fully wired ``GenerationContext``.
+
+Also provides ``quick_verify_snapshot()`` for lightweight integrity checks
+using file size and head/tail hashing.
+"""
 
 from __future__ import annotations
 

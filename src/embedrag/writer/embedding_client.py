@@ -42,7 +42,14 @@ class EmbeddingClient:
         return self._session
 
     async def embed_texts(self, texts: list[str]) -> list[np.ndarray]:
-        """Embed a list of texts, batching as configured."""
+        """Embed a list of texts, splitting into batches of the configured size.
+
+        Args:
+            texts: The text strings to embed.
+
+        Returns:
+            A list of float32 numpy arrays, one per input text.
+        """
         all_embeddings: list[np.ndarray] = []
         for i in range(0, len(texts), self._batch_size):
             batch = texts[i : i + self._batch_size]
@@ -112,5 +119,6 @@ class EmbeddingClient:
         raise RuntimeError("Unreachable")
 
     async def close(self) -> None:
+        """Close the underlying aiohttp session and release connections."""
         if self._session and not self._session.closed:
             await self._session.close()

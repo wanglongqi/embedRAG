@@ -1,4 +1,13 @@
-"""CLI entry point for embedrag writer/query node."""
+"""CLI entry point for embedrag writer/query node.
+
+This module provides the primary command-line interface (CLI) for managing
+EmbedRAG nodes. It uses a sub-command pattern to provide different
+functionalities such as starting servers, downloading remote snapshots, and
+performing data migrations between versions.
+
+The `embedrag` command is the single entry point for both operators (running
+production nodes) and developers (migrating data or testing snapshots).
+"""
 
 from __future__ import annotations
 
@@ -7,6 +16,17 @@ import sys
 
 
 def main() -> None:
+    """The main entry point for the `embedrag` command-line tool.
+
+    This function parses command-line arguments using `argparse` and dispatches
+    to the appropriate sub-command handler.
+
+    Available Sub-commands:
+        writer: Starts the Writer Node server for ingestion and indexing.
+        query: Starts the Query Node server for serving search traffic.
+        migrate: Upgrades local data/manifests to the current version.
+        pull: Downloads and extracts snapshots from a remote URL.
+    """
     parser = argparse.ArgumentParser(prog="embedrag", description="EmbedRAG server")
     sub = parser.add_subparsers(dest="command")
 
@@ -77,11 +97,19 @@ def main() -> None:
 
 
 def _run_pull(url: str, output: str = "./snapshot/active", timeout: int = 600) -> None:
-    """Download a snapshot from a URL and place it ready for a query node.
+    """Download a snapshot from a URL and prepare it for a query node.
 
-    Supports two URL types:
-    - Direct archive: .tar.zst, .tar.gz, .tgz, .tar (e.g. GitHub Release asset)
-    - Base URL: standard embedrag snapshot layout with latest.json
+    This function handles the complexities of downloading, extracting, and
+    verifying snapshots. It supports both direct archive links (e.g., .tar.zst)
+    and base URLs that follow the standard EmbedRAG layout with a `latest.json`
+    index file.
+
+    Args:
+        url (str): The source URL. Can be a .tar.zst/gz archive or a base URL.
+        output (str, optional): The local directory where the snapshot will be
+            stored. Defaults to "./snapshot/active".
+        timeout (int, optional): Network timeout for the download in seconds.
+            Defaults to 600.
     """
     import shutil
     from pathlib import Path
@@ -167,8 +195,15 @@ def _run_pull(url: str, output: str = "./snapshot/active", timeout: int = 600) -
 def _run_migrate(path: str, dry_run: bool = False) -> None:
     """Upgrade a snapshot directory (manifest + DB) to the latest version.
 
-    Accepts either a snapshot directory (containing manifest.json + db/) or
-    a direct path to a embedrag.db file.
+    This utility ensures backward compatibility by upgrading data structures
+    created with older versions of EmbedRAG to the current schema. It can
+    handle upgrading SQLite schemas and restructuring manifest files (e.g.,
+    converting v2 manifests to the v3 per-space format).
+
+    Args:
+        path (str): Path to the snapshot directory or a direct .db file.
+        dry_run (bool, optional): If True, only prints what would be done
+            without modifying any files. Defaults to False.
     """
     import json
     import shutil

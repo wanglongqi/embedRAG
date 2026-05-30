@@ -1,4 +1,9 @@
-"""Reciprocal Rank Fusion (RRF) for merging dense and sparse results."""
+"""Reciprocal Rank Fusion (RRF) for merging dense and sparse results.
+
+This module provides an implementation of the Reciprocal Rank Fusion algorithm,
+which is used to combine multiple ranked result lists into a single, unified
+ranking without requiring score normalization.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +15,15 @@ from embedrag.query.retrieval.sparse import SparseResult
 
 @dataclass
 class FusedResult:
+    """A single hit from the fused search results.
+
+    Attributes:
+        chunk_id (str): The unique identifier of the retrieved chunk.
+        rrf_score (float): The calculated RRF score for this chunk.
+        dense_score (float): The original score from the dense retriever.
+        sparse_score (float): The original score from the sparse retriever.
+    """
+
     chunk_id: str
     rrf_score: float
     dense_score: float
@@ -26,8 +40,27 @@ def rrf_fuse(
 ) -> list[FusedResult]:
     """Merge dense and sparse results using Reciprocal Rank Fusion.
 
-    RRF score = sum(weight / (k + rank_i)) for each ranking list.
-    k is the smoothing constant (default 60 per the original paper).
+    The RRF score for a document is calculated as:
+        RRFscore(d) = sum( weight / (k + rank_i(d)) )
+    where `rank_i(d)` is the rank of document `d` in the i-th ranking list.
+
+    RRF is highly effective because it does not require the underlying scores
+    (e.g., dot product for dense and BM25 for sparse) to be on the same scale.
+
+    Args:
+        dense_results (list[DenseResult]): Ranked results from the dense retriever.
+        sparse_results (list[SparseResult]): Ranked results from the sparse retriever.
+        top_k (int): The number of final fused results to return.
+        k (int, optional): The smoothing constant used in the RRF formula.
+            Defaults to 60, which is the value recommended in the original RRF paper.
+        dense_weight (float, optional): A multiplier for the dense ranking's
+            contribution to the final score. Defaults to 1.0.
+        sparse_weight (float, optional): A multiplier for the sparse ranking's
+            contribution to the final score. Defaults to 1.0.
+
+    Returns:
+        list[FusedResult]: A list of `FusedResult` objects, sorted by `rrf_score`
+            in descending order.
     """
     scores: dict[str, dict] = {}
 

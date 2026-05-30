@@ -1,8 +1,20 @@
 # Welcome to EmbedRAG
 
-Production-grade Retrieval-Augmented Generation system with read/write split architecture, designed to handle millions of documents at 1000 QPS on a 4C16G machine.
+Production-grade Retrieval-Augmented Generation (RAG) system with a high-performance **read/write split** architecture. Designed to handle millions of documents with sub-second latency (1000+ QPS) on modest hardware (4C16G).
+
+## Why EmbedRAG?
+
+Most RAG systems struggle with scaling ingestion and search simultaneously. EmbedRAG solves this by separating the **Writer Node** (ingestion, chunking, embedding, index building) from the **Query Node** (high-speed retrieval, fusion, search).
+
+- **Extreme Performance**: Engineered for high-throughput search with FAISS and SQLite FTS5.
+- **Cost-Efficient**: Achieving 1000 QPS on a single 16GB RAM machine.
+- **Production Ready**: Built-in snapshot management, zero-downtime synchronization, and structured logging.
+- **Flexible Search**: Hybrid search (dense + sparse) with Reciprocal Rank Fusion (RRF) and hierarchical expansion.
+- **Multi-Modal**: Support for heterogeneous embedding spaces (text, images, audio).
 
 ## Architecture
+
+EmbedRAG's architecture revolves around a "Build-Publish-Sync" lifecycle:
 
 ```mermaid
 graph TD
@@ -24,57 +36,59 @@ graph TD
     end
 ```
 
-EmbedRAG is built for high-performance, production-grade RAG applications. It separates the ingestion and query layers to allow independent scaling and extreme performance on modest hardware.
+## Documentation Roadmap
 
-## Key Features
+Dive into the details of EmbedRAG:
 
-- **Read/Write Split**: Dedicated writer node for ingestion and query nodes for search.
-- **High Performance**: 1000 QPS on a 4C16G machine for millions of documents.
-- **Hybrid Search**: Combines FAISS (dense) and SQLite FTS5 (sparse) with Reciprocal Rank Fusion (RRF).
-- **Snapshot-based Sync**: Zero-downtime hot-swapping of search indexes.
-- **Multilingual Support**: Character-aware chunking and trigram-based sparse search.
-- **Multi-Modal**: Support for multiple embedding spaces (text, image, etc.).
-
-## Getting Started
-
-Check out the [Quick Start](index.md#quick-start) section or dive into the full documentation:
-
-- [Configuration Guide](configuration.md)
-- [Embedding Setup](embedding.md)
-- [Multi-Modal RAG](multi-modal.md)
-- [Operational Runbook](operations.md)
-- [Integration Guide](integration.md)
+- [**Quick Start**](#quick-start): Get a local cluster running in minutes.
+- [**Configuration Guide**](configuration.md): Detailed reference for all YAML settings.
+- [**Embedding Setup**](embedding.md): How to connect your favorite embedding models (OpenAI, HuggingFace, etc.).
+- [**Multi-Modal RAG**](multi-modal.md): Building RAG systems for more than just text.
+- [**Operational Runbook**](operations.md): Deploying, monitoring, and scaling EmbedRAG in production.
+- [**Integration Guide**](integration.md): Client libraries and API integration patterns.
+- [**API Reference**](api.md): Automatically generated documentation from source code.
 
 ---
 
-## Quick Start (from README)
+## Quick Start
 
 ### Prerequisites
 
-- Python 3.11+
-- [uv](https://github.com/astral-sh/uv) (recommended) or pip
-- An external embedding service that accepts POST requests and returns float vectors
+- **Python**: 3.11 or later.
+- **Package Manager**: [uv](https://github.com/astral-sh/uv) (recommended) or `pip`.
+- **Embedding API**: An external service (like OpenAI or a local vLLM/Ollama instance) that returns float vectors.
 
-### Install
+### 1. Install
 
 ```bash
 git clone <repo-url> && cd embedRAG
 uv venv --python 3.11
+source .venv/bin/activate
 uv pip install -e ".[dev,docs]"
 ```
 
-### Run the Writer
+### 2. Start the Writer Node
+
+The writer handles ingestion and index building.
 
 ```bash
-# With config file
-embedrag writer --config config/writer_node.yaml.example --port 8001
-
-# Or with defaults (SQLite at /data/embedrag-writer/db/writer.db)
-embedrag writer
+# Start with default settings (data at /data/embedrag)
+embedrag writer --port 8001
 ```
 
-### Run a Query Node
+### 3. Start the Query Node
+
+The query node serves search requests.
 
 ```bash
-embedrag query --config config/query_node.yaml.example --port 8000
+# Start with default settings
+embedrag query --port 8000
+```
+
+### 4. Search and Explore
+
+Once you've ingested some data via the writer, you can perform hybrid searches:
+
+```bash
+curl "http://localhost:8000/search/text?query_text=What+is+EmbedRAG&mode=hybrid"
 ```

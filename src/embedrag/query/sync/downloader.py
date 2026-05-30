@@ -1,4 +1,11 @@
-"""Snapshot downloader: incremental downloads with streaming checksum and retry."""
+"""Snapshot downloader with delta support, checksum verification, and retry.
+
+``SnapshotDownloader`` downloads new snapshot versions from a remote
+``SnapshotClient`` source, reusing unchanged files from the current
+snapshot when delta metadata is available. Each file is downloaded with
+concurrency control, per-file retry with exponential backoff, and
+optional SHA-256 verification.
+"""
 
 from __future__ import annotations
 

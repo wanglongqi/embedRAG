@@ -1,4 +1,10 @@
-"""Hierarchy-aware context expansion: fetch parent/ancestor text for matched chunks."""
+"""Hierarchy-aware context expansion for search results.
+
+``HierarchyExpander`` enriches matched chunks with their parent or ancestor
+text from the chunk hierarchy. For depth=1 it uses the fast
+``parent_chunk_id`` column; for depth>1 it walks the closure table to
+concatenate multiple ancestor levels, improving LLM context quality.
+"""
 
 from __future__ import annotations
 

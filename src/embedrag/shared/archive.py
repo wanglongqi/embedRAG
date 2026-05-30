@@ -83,7 +83,17 @@ def _create_tar_zst(snap: Path, output: Path, level: int) -> None:
 
 
 def is_archive_url(url: str) -> bool:
-    """True if the URL points to a downloadable archive rather than a snapshot base URL."""
+    """Check whether a URL points to a downloadable archive file.
+
+    Inspects the URL path and query string for known archive extensions
+    (``.tar.zst``, ``.tar.gz``, ``.tgz``, ``.tar``).
+
+    Args:
+        url: The URL to inspect.
+
+    Returns:
+        ``True`` if the URL appears to reference a direct archive download.
+    """
     from urllib.parse import urlparse
 
     parsed = urlparse(url)
@@ -157,7 +167,17 @@ def _extract_to(archive_path: Path, output: Path) -> str:
 
 
 def verify_archive_snapshot(snapshot_dir: str) -> Manifest:
-    """Load and return the manifest, raising if it doesn't exist."""
+    """Load and return the manifest from an extracted archive.
+
+    Args:
+        snapshot_dir: Path to the extracted snapshot directory.
+
+    Returns:
+        The loaded ``Manifest`` object.
+
+    Raises:
+        FileNotFoundError: If ``manifest.json`` does not exist at the path.
+    """
     manifest_path = Path(snapshot_dir) / "manifest.json"
     if not manifest_path.exists():
         raise FileNotFoundError(f"No manifest.json found in extracted archive at {snapshot_dir}")

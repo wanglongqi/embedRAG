@@ -1,4 +1,9 @@
-"""Zstandard compression/decompression wrappers."""
+"""Zstandard compression and decompression wrappers.
+
+Provides ``compress_file()`` / ``decompress_file()`` for on-disk snapshot
+artifacts and ``compress_bytes()`` / ``decompress_bytes()`` for in-memory
+payloads. Uses multi-threaded zstd for file-level operations.
+"""
 
 from __future__ import annotations
 
@@ -33,10 +38,27 @@ def decompress_file(
 
 
 def compress_bytes(data: bytes, level: int = 3) -> bytes:
+    """Compress a bytes payload in memory with zstd.
+
+    Args:
+        data: The raw bytes to compress.
+        level: Compression level (1-22, default 3).
+
+    Returns:
+        The compressed bytes.
+    """
     compressor = zstd.ZstdCompressor(level=level)
     return compressor.compress(data)
 
 
 def decompress_bytes(data: bytes) -> bytes:
+    """Decompress a zstd-compressed bytes payload in memory.
+
+    Args:
+        data: The compressed bytes.
+
+    Returns:
+        The original uncompressed bytes.
+    """
     decompressor = zstd.ZstdDecompressor()
     return decompressor.decompress(data)

@@ -1,4 +1,12 @@
-"""Snapshot packager: compresses files, detects deltas, builds manifest v2."""
+"""Snapshot packaging and publishing for the writer node.
+
+``SnapshotPackager`` compresses raw build artifacts (FAISS shards, ID maps,
+SQLite database) with zstd, computes SHA-256 checksums, detects unchanged
+files for delta snapshots, and writes a versioned ``manifest.json``.
+
+``SnapshotPublisher`` uploads a completed snapshot directory to a remote
+object store and updates the ``latest.json`` pointer for query-node discovery.
+"""
 
 from __future__ import annotations
 

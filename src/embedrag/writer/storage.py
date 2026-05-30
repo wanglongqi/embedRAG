@@ -1,4 +1,10 @@
-"""SQLite WAL-mode read/write connection pool for the writer node."""
+"""SQLite WAL-mode read/write connection pool for the writer node.
+
+This module provides a robust connection pool for the EmbedRAG writer node,
+supporting concurrent readers and a single serialized writer using SQLite's
+Write-Ahead Logging (WAL) mode. It handles schema initialization and
+efficient storage of documents and chunks.
+"""
 
 from __future__ import annotations
 
@@ -19,16 +25,38 @@ logger = get_logger(__name__)
 
 
 def _embed_to_blob(embedding: list[float] | np.ndarray) -> bytes:
+    """Convert an embedding list or array to a float32 binary blob.
+
+    Args:
+        embedding: A list of floats or a numpy array.
+
+    Returns:
+        Raw bytes of the float32 numpy array.
+    """
     arr = np.asarray(embedding, dtype=np.float32)
     return arr.tobytes()
 
 
 def _blob_to_embed(blob: bytes) -> np.ndarray:
+    """Convert a binary blob back to a float32 numpy array.
+
+    Args:
+        blob: Raw bytes previously produced by ``_embed_to_blob()``.
+
+    Returns:
+        A float32 numpy array of the original embedding dimension.
+    """
     return np.frombuffer(blob, dtype=np.float32).copy()
 
 
 class WriterSQLitePool:
-    """Read/write split connection pool with WAL mode for the writer node."""
+    """Read/write split connection pool with WAL mode for the writer node.
+
+    EmbedRAG uses a single-writer, multiple-reader pattern. This pool manages
+    a single persistent writer connection protected by an `asyncio.Lock`,
+    and a queue of read-only connections. WAL mode is used to allow readers
+    to proceed while a write is in progress.
+    """
 
     def __init__(
         self,
@@ -37,6 +65,17 @@ class WriterSQLitePool:
         wal_autocheckpoint: int = 1000,
         cache_size_mb: int = 64,
     ):
+        """Initialize the connection pool.
+
+        Args:
+            db_path (str): The file path to the SQLite database.
+            max_readers (int, optional): The number of read-only connections to maintain
+                in the pool. Defaults to 4.
+            wal_autocheckpoint (int, optional): The WAL autocheckpoint interval in pages.
+                Defaults to 1000.
+            cache_size_mb (int, optional): The SQLite page cache size in megabytes.
+                Defaults to 64.
+        """
         self._db_path = db_path
         self._cache_size_mb = cache_size_mb
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -52,6 +91,7 @@ class WriterSQLitePool:
         logger.info("writer_pool_init", db=db_path, readers=max_readers)
 
     def _create_conn(self, readonly: bool) -> sqlite3.Connection:
+        """Create a new SQLite connection with the standard EmbedRAG pragmas."""
         mode = "ro" if readonly else "rwc"
         uri = f"file:{self._db_path}?mode={mode}"
         conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
@@ -65,6 +105,11 @@ class WriterSQLitePool:
 
     @asynccontextmanager
     async def read_conn(self) -> AsyncIterator[sqlite3.Connection]:
+        """Acquire a read-only connection from the pool.
+
+        Yields:
+            sqlite3.Connection: A read-only SQLite connection.
+        """
         conn = await self._readers.get()
         try:
             yield conn
@@ -73,17 +118,29 @@ class WriterSQLitePool:
 
     @asynccontextmanager
     async def write_conn(self) -> AsyncIterator[sqlite3.Connection]:
+        """Acquire the exclusive writer connection.
+
+        Yields:
+            sqlite3.Connection: The read-write SQLite connection.
+        """
         async with self._write_lock:
             yield self._writer
 
     @contextmanager
     def write_conn_sync(self) -> Iterator[sqlite3.Connection]:
+        """Acquire the exclusive writer connection in a synchronous context.
+
+        Yields:
+            sqlite3.Connection: The read-write SQLite connection.
+        """
         yield self._writer
 
     def checkpoint(self) -> None:
+        """Manually trigger a SQLite WAL checkpoint (TRUNCATE)."""
         self._writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     def close(self) -> None:
+        """Close all connections in the pool and trigger a final checkpoint."""
         self.checkpoint()
         self._writer.close()
         while not self._readers.empty():
@@ -228,14 +285,26 @@ class WriterSQLitePool:
             conn.commit()
 
     async def insert_closure_batch(self, relations: list[tuple[str, str, int]]) -> None:
-        """Insert closure table entries: (ancestor_id, descendant_id, depth)."""
+        """Insert closure table entries: (ancestor_id, descendant_id, depth).
+
+        Args:
+            relations: A list of ``(ancestor_id, descendant_id, depth)`` tuples
+                as produced by ``build_closure_entries()``.
+        """
         async with self.write_conn() as conn:
             sql = "INSERT OR IGNORE INTO chunk_closure (ancestor_id, descendant_id, depth) VALUES (?, ?, ?)"
             conn.executemany(sql, relations)
             conn.commit()
 
     async def get_all_chunks_with_embeddings(self, space: str = "text") -> list[tuple[str, np.ndarray]]:
-        """Read all (chunk_id, embedding) pairs for a given space."""
+        """Read all ``(chunk_id, embedding)`` pairs for a given embedding space.
+
+        Args:
+            space: The embedding space name (default ``"text"``).
+
+        Returns:
+            A list of ``(chunk_id, float32_array)`` tuples.
+        """
         async with self.read_conn() as conn:
             rows = conn.execute(
                 "SELECT chunk_id, embedding FROM chunk_embeddings WHERE space = ?",
@@ -244,23 +313,33 @@ class WriterSQLitePool:
             return [(r["chunk_id"], _blob_to_embed(r["embedding"])) for r in rows]
 
     async def get_embedding_spaces(self) -> list[str]:
-        """Return all distinct embedding space names."""
+        """Return all distinct embedding space names in the database.
+
+        Returns:
+            An alphabetically sorted list of space names.
+        """
         async with self.read_conn() as conn:
             rows = conn.execute("SELECT DISTINCT space FROM chunk_embeddings ORDER BY space").fetchall()
             return [r[0] for r in rows]
 
     async def get_chunk_count(self) -> int:
+        """Return the total number of chunk rows in the database."""
         async with self.read_conn() as conn:
             row = conn.execute("SELECT count(*) FROM chunks").fetchone()
             return row[0]
 
     async def get_doc_count(self) -> int:
+        """Return the total number of document rows in the database."""
         async with self.read_conn() as conn:
             row = conn.execute("SELECT count(*) FROM documents").fetchone()
             return row[0]
 
     async def get_per_space_vector_counts(self) -> dict[str, int]:
-        """Return {space: vector_count} for all embedding spaces."""
+        """Return a mapping of embedding space to vector count.
+
+        Returns:
+            A dict like ``{"text": 1234, "image": 567}``.
+        """
         async with self.read_conn() as conn:
             rows = conn.execute(
                 "SELECT space, count(*) AS cnt FROM chunk_embeddings GROUP BY space ORDER BY space"
@@ -274,7 +353,17 @@ class WriterSQLitePool:
         doc_type: str | None = None,
         source: str | None = None,
     ) -> tuple[list[dict], int]:
-        """Return paginated document list and total count matching the filters."""
+        """Return a paginated document list and total count matching optional filters.
+
+        Args:
+            limit: Maximum number of documents per page.
+            offset: Number of documents to skip.
+            doc_type: Optional document type filter.
+            source: Optional document source filter.
+
+        Returns:
+            A tuple of ``(document_dicts, total_count)``.
+        """
         async with self.read_conn() as conn:
             where_parts: list[str] = []
             params: list = []
@@ -307,7 +396,14 @@ class WriterSQLitePool:
             return docs, total
 
     async def get_chunk_ids_for_doc(self, doc_id: str) -> list[str]:
-        """Return all chunk_ids belonging to a document, ordered by seq_in_parent."""
+        """Return all chunk IDs belonging to a document, ordered by seq_in_parent.
+
+        Args:
+            doc_id: The document identifier.
+
+        Returns:
+            An ordered list of chunk IDs.
+        """
         async with self.read_conn() as conn:
             rows = conn.execute(
                 "SELECT chunk_id FROM chunks WHERE doc_id = ? ORDER BY level, seq_in_parent",
@@ -316,7 +412,14 @@ class WriterSQLitePool:
             return [r["chunk_id"] for r in rows]
 
     async def delete_documents_bulk(self, doc_ids: list[str]) -> tuple[int, int]:
-        """Delete multiple documents and their chunks. Returns (docs_deleted, chunks_deleted)."""
+        """Delete multiple documents and their associated chunks.
+
+        Args:
+            doc_ids: The document identifiers to delete.
+
+        Returns:
+            A tuple of ``(docs_deleted, chunks_deleted)``.
+        """
         if not doc_ids:
             return 0, 0
         total_chunks = 0
@@ -325,17 +428,33 @@ class WriterSQLitePool:
         return len(doc_ids), total_chunks
 
     async def get_doc_ids_by_type(self, doc_type: str) -> list[str]:
-        """Return all doc_ids matching a given doc_type."""
+        """Return all document IDs matching a given document type.
+
+        Args:
+            doc_type: The document type to filter by.
+
+        Returns:
+            A list of matching document IDs.
+        """
         async with self.read_conn() as conn:
             rows = conn.execute("SELECT doc_id FROM documents WHERE doc_type = ?", (doc_type,)).fetchall()
             return [r["doc_id"] for r in rows]
 
     def get_db_size_bytes(self) -> int:
-        """Return the on-disk size of the database file."""
+        """Return the on-disk size of the database file in bytes."""
         return Path(self._db_path).stat().st_size
 
     async def delete_document(self, doc_id: str) -> int:
-        """Delete a document and all its chunks. Returns chunks deleted."""
+        """Delete a single document and all its associated chunks.
+
+        Cascades through closure, FTS, and embedding tables.
+
+        Args:
+            doc_id: The document identifier to delete.
+
+        Returns:
+            The number of chunk rows deleted.
+        """
         async with self.write_conn() as conn:
             chunk_ids = [
                 r[0] for r in conn.execute("SELECT chunk_id FROM chunks WHERE doc_id = ?", (doc_id,)).fetchall()
@@ -360,7 +479,18 @@ class WriterSQLitePool:
             return len(chunk_ids)
 
     def export_query_db(self, output_path: str) -> tuple[int, int]:
-        """Export a lean read-only SQLite for query nodes (no embedding column)."""
+        """Export a lean read-only SQLite database for query nodes.
+
+        The exported database excludes the embedding column and includes only
+        the tables required for serving queries (documents, chunks, closure,
+        FTS, schema version).
+
+        Args:
+            output_path: Filesystem path for the exported database.
+
+        Returns:
+            A tuple of ``(doc_count, chunk_count)`` in the exported DB.
+        """
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         dst = sqlite3.connect(output_path)
         dst.execute("PRAGMA journal_mode=DELETE")

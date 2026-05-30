@@ -1,4 +1,11 @@
-"""Generation manager: active/standby snapshot generations with atomic swap."""
+"""Active/standby snapshot generation management with atomic swap.
+
+``GenerationContext`` bundles all resources (FAISS shards, SQLite pool,
+hotfix buffers) for a single snapshot version. ``GenerationManager``
+holds the active generation and supports a reference-counted swap protocol
+that drains in-flight queries before unloading the old generation,
+enabling zero-downtime snapshot updates.
+"""
 
 from __future__ import annotations
 
@@ -33,14 +40,37 @@ class GenerationContext:
 
     @property
     def spaces(self) -> list[str]:
+        """Return the list of embedding space names available in this generation."""
         return list(self.shard_managers.keys())
 
     def get_shard_manager(self, space: str = "text") -> ShardManager:
+        """Get the ShardManager for a named embedding space.
+
+        Args:
+            space: The embedding space name (default ``"text"``).
+
+        Returns:
+            The ``ShardManager`` for the requested space.
+
+        Raises:
+            KeyError: If the space does not exist in this generation.
+        """
         if space not in self.shard_managers:
             raise KeyError(f"Unknown embedding space '{space}'. Available: {self.spaces}")
         return self.shard_managers[space]
 
     def get_hotfix_buffer(self, space: str = "text") -> HotfixBuffer:
+        """Get the HotfixBuffer for a named embedding space.
+
+        Args:
+            space: The embedding space name (default ``"text"``).
+
+        Returns:
+            The ``HotfixBuffer`` for the requested space.
+
+        Raises:
+            KeyError: If the space does not exist in this generation.
+        """
         if space not in self.hotfix_buffers:
             raise KeyError(f"Unknown embedding space '{space}'. Available: {self.spaces}")
         return self.hotfix_buffers[space]

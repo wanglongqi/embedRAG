@@ -1,4 +1,10 @@
-"""Read-only SQLite connection pool and document store for the query node."""
+"""Read-only SQLite connection pool and document store for the query node.
+
+``ReadOnlySQLitePool`` maintains a fixed-size queue of read-only SQLite
+connections (no locks, no WAL, pure parallel reads). ``QueryDocStore``
+wraps the pool with an LRU-cached chunk fetch interface and convenience
+methods for hierarchy traversal (parent, ancestors, neighbors).
+"""
 
 from __future__ import annotations
 
@@ -37,6 +43,11 @@ class ReadOnlySQLitePool:
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
+        """Acquire a read-only SQLite connection from the pool.
+
+        Yields a connection that is returned to the pool when the context
+        manager exits. Safe for concurrent use across threads.
+        """
         conn = self._pool.get()
         try:
             yield conn
@@ -44,6 +55,7 @@ class ReadOnlySQLitePool:
             self._pool.put(conn)
 
     def close(self) -> None:
+        """Close all connections in the pool and release resources."""
         while not self._pool.empty():
             try:
                 conn = self._pool.get_nowait()
@@ -198,4 +210,5 @@ class QueryDocStore:
             }
 
     def clear_cache(self) -> None:
+        """Clear the LRU chunk cache to free memory."""
         self._get_chunk_cached.cache_clear()

@@ -1,4 +1,10 @@
-"""Hotfix buffer: small in-memory emergency write buffer for the query node."""
+"""In-memory hotfix buffer for emergency writes on the query node.
+
+Provides a small FAISS ``IndexFlatIP`` buffer that supports add, delete
+(mark), and search operations without rebuilding the main index. Useful
+for urgent document corrections between snapshot releases. Cleared
+automatically when the next snapshot generation is loaded.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +22,15 @@ logger = get_logger(__name__)
 
 @dataclass
 class HotfixChunkData:
+    """Data stored per chunk in the hotfix buffer.
+
+    Attributes:
+        chunk_id: Unique identifier for this chunk.
+        doc_id: Identifier of the parent document.
+        text: Raw text content of the chunk.
+        metadata: Arbitrary key-value metadata attached to the chunk.
+    """
+
     chunk_id: str
     doc_id: str
     text: str
@@ -40,13 +55,26 @@ class HotfixBuffer:
 
     @property
     def size(self) -> int:
+        """Number of vectors currently in the hotfix buffer."""
         return self._index.ntotal
 
     @property
     def deleted_count(self) -> int:
+        """Number of chunk IDs marked as deleted."""
         return len(self._deleted_ids)
 
     def add(self, chunk_id: str, vector: np.ndarray, chunk_data: HotfixChunkData) -> None:
+        """Add a chunk to the hotfix buffer.
+
+        Args:
+            chunk_id: Unique identifier for the chunk.
+            vector: The embedding vector (will be reshaped to 1D float32).
+            chunk_data: Associated metadata and text for the chunk.
+
+        Note:
+            If the buffer is full, the chunk is silently ignored and a
+            warning is logged.
+        """
         with self._lock:
             if self._index.ntotal >= self._max_size:
                 logger.warn("hotfix_buffer_full", max_size=self._max_size)
@@ -58,11 +86,26 @@ class HotfixBuffer:
             self._chunks[chunk_id] = chunk_data
 
     def delete(self, chunk_id: str) -> None:
-        """Mark a chunk ID as deleted (filtered from main index results)."""
+        """Mark a chunk ID as deleted so it is excluded from search results.
+
+        The chunk is not actually removed from the index; it is tracked in
+        a deletion set and filtered at query time.
+
+        Args:
+            chunk_id: The chunk identifier to mark as deleted.
+        """
         with self._lock:
             self._deleted_ids.add(chunk_id)
 
     def is_deleted(self, chunk_id: str) -> bool:
+        """Check whether a chunk ID has been marked as deleted.
+
+        Args:
+            chunk_id: The chunk identifier to check.
+
+        Returns:
+            ``True`` if the chunk was previously deleted via ``delete()``.
+        """
         return chunk_id in self._deleted_ids
 
     def search(self, query: np.ndarray, top_k: int) -> list[tuple[str, float]]:
@@ -81,6 +124,15 @@ class HotfixBuffer:
         return results
 
     def get_chunk(self, chunk_id: str) -> ChunkResult | None:
+        """Retrieve a chunk's data by its ID.
+
+        Args:
+            chunk_id: The chunk identifier.
+
+        Returns:
+            A ``ChunkResult`` populated with the stored data, or ``None``
+            if the chunk ID is not in the buffer.
+        """
         data = self._chunks.get(chunk_id)
         if not data:
             return None
@@ -93,6 +145,7 @@ class HotfixBuffer:
         )
 
     def clear(self) -> None:
+        """Reset the hotfix buffer, removing all chunks and deletion marks."""
         with self._lock:
             self._index.reset()
             self._pos_to_id.clear()

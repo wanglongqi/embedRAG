@@ -1,4 +1,10 @@
-"""Writer API routes: /ingest, /build, /publish, /health."""
+"""FastAPI route handlers for the writer node.
+
+Endpoints cover document ingestion (single, archive, bulk delete), index
+building, snapshot packaging/publishing, and health checks. All handlers
+are registered on an ``APIRouter`` and wired to the writer node's
+``WriterState`` at application creation time.
+"""
 
 from __future__ import annotations
 

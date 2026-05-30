@@ -1,4 +1,9 @@
-"""Manifest v3: self-describing snapshot metadata with per-space indexes and checksums."""
+"""Manifest v3: self-describing snapshot metadata with per-space indexes and checksums.
+
+This module defines the schema for the EmbedRAG snapshot manifest. The manifest
+is the central piece of metadata that coordinates how the query node loads
+an index, verifying checksums and mapping shards to the correct embedding spaces.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +14,19 @@ from pathlib import Path
 
 @dataclass
 class ShardEntry:
+    """Represents a single FAISS index shard file within a snapshot.
+
+    Attributes:
+        file (str): The relative path to the uncompressed shard file.
+        compressed_file (str, optional): The relative path to the compressed
+            version of the shard.
+        sha256_raw (str, optional): The SHA256 checksum of the uncompressed file.
+        sha256_compressed (str, optional): The SHA256 checksum of the compressed file.
+        raw_size (int, optional): The size of the uncompressed file in bytes.
+        compressed_size (int, optional): The size of the compressed file in bytes.
+        num_vectors (int, optional): The number of vectors contained in this shard.
+    """
+
     file: str
     compressed_file: str = ""
     sha256_raw: str = ""
@@ -20,6 +38,18 @@ class ShardEntry:
 
 @dataclass
 class IndexInfo:
+    """Metadata describing the FAISS index for a specific embedding space.
+
+    Attributes:
+        type (str): The FAISS index factory string (e.g., 'IVF4096,PQ64').
+        dim (int): The dimensionality of the vectors in this index.
+        metric (str): The distance metric used (e.g., 'IP' for Inner Product).
+        nprobe_default (int): The default nprobe value for search.
+        num_shards (int): The number of shards the index is split into.
+        total_vectors (int): The total number of vectors across all shards.
+        shards (list[ShardEntry]): A list of individual shard metadata.
+    """
+
     type: str = "IVF4096,PQ64"
     dim: int = 1024
     metric: str = "IP"
@@ -31,7 +61,18 @@ class IndexInfo:
 
 @dataclass
 class FileEntry:
-    """A single file in the snapshot (db or id_map)."""
+    """Metadata for a single non-index file in the snapshot (e.g., SQLite DB).
+
+    Attributes:
+        file (str): The relative path to the uncompressed file.
+        compressed_file (str, optional): The relative path to the compressed version.
+        sha256_raw (str, optional): The SHA256 checksum of the uncompressed file.
+        sha256_compressed (str, optional): The SHA256 checksum of the compressed file.
+        raw_size (int, optional): The size of the uncompressed file in bytes.
+        compressed_size (int, optional): The size of the compressed file in bytes.
+        doc_count (int, optional): For databases, the total number of documents.
+        chunk_count (int, optional): For databases, the total number of chunks.
+    """
 
     file: str
     compressed_file: str = ""
@@ -45,6 +86,15 @@ class FileEntry:
 
 @dataclass
 class DeltaInfo:
+    """Information about the difference between this and a previous version.
+
+    Attributes:
+        from_version (str): The base version this delta is calculated from.
+        unchanged_files (list[str]): List of files that haven't changed.
+        changed_files (list[str]): List of files that were added or modified.
+        delta_compressed_size (int): Total size of the changed files when compressed.
+    """
+
     from_version: str = ""
     unchanged_files: list[str] = field(default_factory=list)
     changed_files: list[str] = field(default_factory=list)
@@ -53,6 +103,22 @@ class DeltaInfo:
 
 @dataclass
 class Manifest:
+    """The root metadata object for an EmbedRAG snapshot.
+
+    Attributes:
+        manifest_version (int): The version of the manifest schema itself (currently 3).
+        snapshot_version (str): The unique version identifier for this snapshot.
+        created_at (str): ISO timestamp of when the snapshot was created.
+        previous_version (str): The version ID of the snapshot this one was built upon.
+        schema_version (int): The version of the underlying database schema.
+        indexes (dict[str, IndexInfo]): Mapping of space names to index metadata.
+        db (FileEntry): Metadata for the primary SQLite database.
+        id_maps (dict[str, FileEntry]): Mapping of space names to ID mapping files.
+        total_raw_size (int): Sum of all uncompressed file sizes.
+        total_compressed_size (int): Sum of all compressed file sizes.
+        delta (DeltaInfo, optional): Differential information relative to a previous version.
+    """
+
     manifest_version: int = 3
     snapshot_version: str = ""
     created_at: str = ""
@@ -70,10 +136,18 @@ class Manifest:
 
     @property
     def spaces(self) -> list[str]:
+        """list[str]: A list of all embedding space names defined in this manifest."""
         return list(self.indexes.keys())
 
     def all_compressed_files(self) -> list[str]:
-        """Return list of all compressed file paths in the snapshot."""
+        """Return a list of all compressed file paths required for this snapshot.
+
+        This method is used by the syncer to determine which files need to be
+        downloaded from the object store.
+
+        Returns:
+            list[str]: A list of relative file paths.
+        """
         files: list[str] = []
         for idx_info in self.indexes.values():
             for shard in idx_info.shards:
@@ -84,7 +158,15 @@ class Manifest:
         return files
 
     def get_file_entry_by_raw(self, raw_path: str) -> FileEntry | ShardEntry | None:
-        """Look up a file entry by its uncompressed (raw) file path."""
+        """Look up a file or shard entry using its uncompressed (raw) path.
+
+        Args:
+            raw_path (str): The relative path to the uncompressed file.
+
+        Returns:
+            FileEntry | ShardEntry | None: The matching metadata entry,
+                or None if not found.
+        """
         for idx_info in self.indexes.values():
             for shard in idx_info.shards:
                 if shard.file == raw_path:

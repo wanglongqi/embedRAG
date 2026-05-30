@@ -1,4 +1,9 @@
-"""SHA-256 checksum utilities: full-file, streaming, and quick verification."""
+"""SHA-256 checksum utilities for snapshot integrity verification.
+
+Provides ``compute_sha256()`` for full-file hashing, ``quick_verify()`` for
+a lightweight size + head/tail check suitable at startup, and
+``StreamingHasher`` for incremental checksum computation during downloads.
+"""
 
 from __future__ import annotations
 
@@ -54,8 +59,18 @@ class StreamingHasher:
         self.bytes_processed = 0
 
     def update(self, data: bytes) -> None:
+        """Feed more bytes into the running hash computation.
+
+        Args:
+            data: A chunk of bytes to include in the hash.
+        """
         self._hasher.update(data)
         self.bytes_processed += len(data)
 
     def hexdigest(self) -> str:
+        """Finalize and return the SHA-256 digest as a hex string.
+
+        Returns:
+            A 64-character hexadecimal SHA-256 digest.
+        """
         return self._hasher.hexdigest()

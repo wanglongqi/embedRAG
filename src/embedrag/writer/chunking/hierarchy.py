@@ -1,4 +1,10 @@
-"""Build closure table entries from a list of ChunkNodes with parent links."""
+"""Closure table builder for hierarchical chunk structures.
+
+Walks the ``parent_chunk_id`` links in a flat list of ``ChunkNode`` objects
+and produces ``(ancestor_id, descendant_id, depth)`` tuples suitable for
+bulk insertion into the ``chunk_closure`` table. Every node is recorded
+as its own ancestor at depth 0.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,10 @@
-"""FAISS shard worker: loads one shard and handles search requests."""
+"""FAISS shard worker for single-shard search.
+
+``ShardWorker`` loads one FAISS index shard (with optional memory-mapping),
+configures nprobe, and exposes a ``search()`` method that releases the GIL
+during C++ FAISS execution. Designed to be used by ``ShardManager`` which
+dispatches across multiple shard workers concurrently.
+"""
 
 from __future__ import annotations
 
@@ -33,6 +39,7 @@ class ShardWorker:
 
     @property
     def ntotal(self) -> int:
+        """Total number of vectors stored in this shard."""
         return self._index.ntotal
 
     def search(self, query_vectors: np.ndarray, top_k: int) -> tuple[np.ndarray, np.ndarray]:
@@ -55,5 +62,6 @@ class ShardWorker:
         return distances, indices
 
     def shutdown(self) -> None:
+        """Release the loaded FAISS index and free resources."""
         del self._index
         logger.info("shard_unloaded", path=self._path)

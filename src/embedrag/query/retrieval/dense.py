@@ -1,4 +1,9 @@
-"""Dense retriever: parallel shard search with result merging."""
+"""Dense retriever: parallel shard search with result merging.
+
+This module provides the core vector search functionality for the query node.
+It manages a pool of FAISS shard workers, dispatches queries to them in parallel,
+and merges the partial results into a final ranked list.
+"""
 
 from __future__ import annotations
 
@@ -17,28 +22,63 @@ logger = get_logger(__name__)
 
 @dataclass
 class DenseResult:
+    """A single hit from the dense vector search.
+
+    Attributes:
+        chunk_id (str): The unique identifier of the retrieved chunk.
+        score (float): The similarity score (usually inner product/dot product) between
+            the query vector and the chunk's vector. Higher is more similar.
+    """
+
     chunk_id: str
     score: float
 
 
 class ShardManager:
-    """Manages multiple FAISS shard workers and dispatches parallel searches."""
+    """Manages multiple FAISS shard workers and dispatches parallel searches.
+
+    The index is split into multiple shards during the build phase. This manager
+    holds references to the loaded `ShardWorker` instances and uses a thread pool
+    to execute searches across all shards concurrently, minimizing latency.
+    """
 
     def __init__(self, workers: list[ShardWorker], id_mapper: IDMapper):
+        """Initialize the ShardManager.
+
+        Args:
+            workers (list[ShardWorker]): A list of loaded `ShardWorker` instances, one for each index shard.
+            id_mapper (IDMapper): An `IDMapper` instance used to translate FAISS internal
+                integer IDs back to string `chunk_id`s.
+        """
         self._workers = workers
         self._id_mapper = id_mapper
         self._executor = ThreadPoolExecutor(max_workers=max(1, len(workers)))
 
     @property
     def total_vectors(self) -> int:
+        """int: The total number of vectors across all managed shards."""
         return sum(w.ntotal for w in self._workers)
 
     @property
     def num_shards(self) -> int:
+        """int: The number of active shards being managed."""
         return len(self._workers)
 
     def search(self, query_vector: np.ndarray, top_k: int) -> list[DenseResult]:
-        """Search all shards in parallel and merge results by score."""
+        """Search all shards in parallel and merge the results.
+
+        This method dispatches the query to all workers via a thread pool. Once all
+        workers return their local top-k results, the lists are concatenated,
+        sorted globally by score, and truncated to the final `top_k`.
+
+        Args:
+            query_vector (np.ndarray): A 1D or 2D float32 numpy array representing the query embedding.
+                If 1D, it will be reshaped to (1, dim).
+            top_k (int): The maximum number of total results to return.
+
+        Returns:
+            list[DenseResult]: A list of `DenseResult` objects, sorted by score in descending order.
+        """
         if query_vector.ndim == 1:
             query_vector = query_vector.reshape(1, -1)
 
@@ -55,6 +95,7 @@ class ShardManager:
         return all_results[:top_k]
 
     def _search_one(self, shard_idx: int, worker: ShardWorker, query: np.ndarray, top_k: int) -> list[DenseResult]:
+        """Execute a search on a single shard worker and resolve IDs."""
         distances, indices = worker.search(query, top_k)
         results: list[DenseResult] = []
         for dist, fid in zip(distances[0], indices[0]):
@@ -66,15 +107,25 @@ class ShardManager:
         return results
 
     def shutdown(self) -> None:
+        """Shut down the thread pool and release all worker resources."""
         self._executor.shutdown(wait=False)
         for w in self._workers:
             w.shutdown()
 
 
 class DenseRetriever:
-    """High-level dense retrieval: shard search + optional hotfix merge."""
+    """High-level dense retrieval interface.
+
+    Wraps the `ShardManager` to provide a clean search API, handling timing
+    and the filtering of deleted chunks (hotfixes) before returning the final results.
+    """
 
     def __init__(self, shard_manager: ShardManager):
+        """Initialize the DenseRetriever.
+
+        Args:
+            shard_manager (ShardManager): The active `ShardManager` handling index shards.
+        """
         self._shard_manager = shard_manager
 
     def search(
@@ -83,9 +134,23 @@ class DenseRetriever:
         top_k: int,
         deleted_ids: set[str] | None = None,
     ) -> tuple[list[DenseResult], float]:
-        """Search dense index, filtering out deleted IDs.
+        """Execute a dense search and filter out logically deleted chunks.
 
-        Returns (results, elapsed_ms).
+        To accommodate filtering without returning fewer results than requested,
+        this method queries the underlying shards for `top_k * 2` results, filters
+        out any chunk IDs present in `deleted_ids`, and then truncates to `top_k`.
+
+        Args:
+            query_vector (np.ndarray): The query embedding vector.
+            top_k (int): The final number of desired results.
+            deleted_ids (set[str], optional): An optional set of `chunk_id` strings that
+                should be excluded from the search results (typically used for hot-swapping
+                deletes before the next snapshot).
+
+        Returns:
+            tuple[list[DenseResult], float]: A tuple containing:
+                - The list of filtered `DenseResult` objects.
+                - The elapsed time in milliseconds for the search operation.
         """
         t0 = time.monotonic()
         raw_results = self._shard_manager.search(query_vector, top_k * 2)

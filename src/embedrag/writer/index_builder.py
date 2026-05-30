@@ -1,4 +1,12 @@
-"""FAISS IVF_PQ index builder: training, sharding, and serialization."""
+"""FAISS IVF_PQ index builder: training, sharding, and serialization.
+
+This module provides the logic for constructing sharded FAISS indexes from
+document embeddings. To achieve high performance and support datasets that
+exceed single-machine memory, EmbedRAG splits the vector space into multiple
+independent shards. This builder handles the automatic selection of the
+most appropriate index type (e.g., Flat, IVF, or PQ) based on the dataset size
+and performs deterministic sharding to ensure consistency.
+"""
 
 from __future__ import annotations
 
@@ -18,9 +26,25 @@ logger = get_logger(__name__)
 
 
 class IndexBuilder:
-    """Builds sharded FAISS IVF_PQ indexes from chunk embeddings."""
+    """Builds sharded FAISS IVF_PQ indexes from chunk embeddings.
+
+    The builder orchestrates the entire index creation pipeline:
+    1. Distributing chunk IDs and embeddings into shards using consistent hashing.
+    2. Analyzing the dataset size to select an optimal FAISS index factory string.
+    3. Training IVF centroids and PQ sub-quantizers if necessary.
+    4. Building and serializing individual shards to disk.
+    5. Generating the corresponding ID mapping files.
+    """
 
     def __init__(self, config: IndexBuildConfig, dim: int = 1024):
+        """Initialize the IndexBuilder.
+
+        Args:
+            config (IndexBuildConfig): Configuration parameters for the build
+                process, including shard count and quantization settings.
+            dim (int, optional): The dimensionality of the input vectors.
+                Defaults to 1024.
+        """
         self._config = config
         self._dim = dim
 
@@ -31,16 +55,26 @@ class IndexBuilder:
         output_dir: str,
         space: str = "text",
     ) -> tuple[IndexInfo, str]:
-        """Build sharded FAISS index for one embedding space.
+        """Build a complete sharded FAISS index for a specific embedding space.
+
+        This is the primary entry point for index construction. It takes a
+        flat list of embeddings and their IDs, partitions them, builds the
+        physical shard files, and returns the metadata required for the manifest.
 
         Args:
-            chunk_ids: Chunk IDs corresponding to each embedding row.
-            embeddings: (N, dim) float32 matrix.
-            output_dir: Top-level build directory.
-            space: Embedding space name (files go under index/{space}/).
+            chunk_ids (list[str]): A list of globally unique chunk identifiers.
+            embeddings (np.ndarray): A 2D float32 numpy array of shape (N, dim)
+                containing the vectors to be indexed.
+            output_dir (str): The root directory where the built files will
+                be stored.
+            space (str, optional): The name of the embedding space (e.g., 'text').
+                Files will be stored in a sub-folder named after the space.
+                Defaults to "text".
 
         Returns:
-            (IndexInfo, id_map_path) tuple.
+            tuple[IndexInfo, str]: A tuple containing:
+                - IndexInfo: A dataclass describing the built index (type, shards, etc.).
+                - str: The filesystem path to the generated ID mapping file.
         """
         n_vectors = len(chunk_ids)
         assert embeddings.shape == (
@@ -115,7 +149,19 @@ class IndexBuilder:
         return index_info, id_map_path
 
     def _determine_index_type(self, n_vectors: int) -> str:
-        """Choose index type based on dataset size."""
+        """Heuristically choose the optimal FAISS index factory string.
+
+        The selection logic is:
+            - < 1,000 vectors: 'Flat' (Exact search, no training).
+            - < 50,000 vectors: 'IVF{n},Flat' (Inverted file with exact residuals).
+            - >= 50,000 vectors: 'IVF{n},PQ{m}' (Product Quantization for high compression).
+
+        Args:
+            n_vectors (int): The total number of vectors in the dataset.
+
+        Returns:
+            str: A FAISS factory string compatible with `faiss.index_factory`.
+        """
         if n_vectors < 1_000:
             return "Flat"
         nlist = min(self._config.ivf_nlist, max(4, int(n_vectors**0.5)))
@@ -125,7 +171,17 @@ class IndexBuilder:
         return f"IVF{nlist},PQ{pq_m}"
 
     def _build_single_shard(self, vectors: np.ndarray, index_type: str, total_vectors: int) -> faiss.Index:
-        """Build a single FAISS index for one shard."""
+        """Construct, train, and populate a single FAISS index shard.
+
+        Args:
+            vectors (np.ndarray): The subset of vectors to be added to this shard.
+            index_type (str): The FAISS factory string to use.
+            total_vectors (int): The total number of vectors across all shards
+                (used to determine training samples).
+
+        Returns:
+            faiss.Index: A fully built and trained FAISS index object.
+        """
         n = vectors.shape[0]
         dim = vectors.shape[1]
 
@@ -155,7 +211,19 @@ class IndexBuilder:
         return index
 
     def _assign_shards(self, chunk_ids: list[str], num_shards: int) -> np.ndarray:
-        """Assign chunks to shards deterministically by hashing doc portion of chunk_id."""
+        """Deterministically assign each chunk ID to a shard index.
+
+        Uses MD5 hashing to ensure that a given chunk ID always maps to the
+        same shard, which is critical for consistent ID mapping and
+        incremental updates.
+
+        Args:
+            chunk_ids (list[str]): The list of IDs to assign.
+            num_shards (int): The total number of shards.
+
+        Returns:
+            np.ndarray: An int32 array of shard assignments (0 to num_shards-1).
+        """
         assignments = np.zeros(len(chunk_ids), dtype=np.int32)
         for i, cid in enumerate(chunk_ids):
             h = int(hashlib.md5(cid.encode()).hexdigest(), 16)

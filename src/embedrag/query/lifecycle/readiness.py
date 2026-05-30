@@ -1,4 +1,11 @@
-"""Health/readiness state machine for the query node."""
+"""Health and readiness state machine for the query node.
+
+Tracks the node lifecycle phase (STARTING → DOWNLOADING → LOADING → READY
+→ FATAL) so that load balancers and orchestrators can distinguish between
+transient unavailability and permanent failure.
+
+The ``ReadinessState`` class drives the /health and /readiness endpoints.
+"""
 
 from __future__ import annotations
 
@@ -33,4 +40,9 @@ class ReadinessState:
         return self._phase in (NodePhase.READY, NodePhase.UPDATING)
 
     def set_phase(self, phase: NodePhase) -> None:
+        """Advance the node to a new lifecycle phase.
+
+        Args:
+            phase: The target ``NodePhase`` to transition to.
+        """
         self._phase = phase

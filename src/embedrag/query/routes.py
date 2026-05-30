@@ -1,4 +1,10 @@
-"""Query node API routes: /search, /health, /readiness, /admin/*."""
+"""FastAPI route handlers for the query node.
+
+Endpoints cover search (single-space, multi-space, debug), reranking,
+health/readiness checks, admin operations (hotfix add/delete, sync trigger),
+and snapshot version inspection. All handlers are registered on an
+``APIRouter`` and attached to the query node FastAPI app at creation time.
+"""
 
 from __future__ import annotations
 

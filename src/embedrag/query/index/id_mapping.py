@@ -1,4 +1,10 @@
-"""Mapping between FAISS internal IDs and chunk IDs."""
+"""Bidirectional mapping between FAISS internal IDs and chunk IDs.
+
+FAISS indexes use consecutive integers (0..N-1) per shard. This module
+loads a global msgpack mapping and reconstructs per-shard dictionaries so
+that ``(shard_index, faiss_position)`` can be resolved to a ``chunk_id``
+string for downstream retrieval.
+"""
 
 from __future__ import annotations
 
@@ -52,4 +58,13 @@ class IDMapper:
         return [shard_map.get(fid, "") for fid in faiss_ids]
 
     def resolve_single(self, shard_idx: int, faiss_id: int) -> str:
+        """Resolve a single FAISS position to a chunk ID.
+
+        Args:
+            shard_idx: The shard index.
+            faiss_id: The FAISS internal position (0-based within the shard).
+
+        Returns:
+            The chunk ID string, or an empty string if not found.
+        """
         return self._maps[shard_idx].get(faiss_id, "")

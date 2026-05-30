@@ -1,4 +1,12 @@
-"""Cold-start bootstrap: from config to ready."""
+"""Cold-start bootstrap logic for the query node.
+
+Orchestrates the transition from a stopped configuration to a fully loaded
+query node: checks for existing local snapshots, downloads from HTTP or
+object-store sources if needed, verifies integrity, and swaps the snapshot
+into the active generation manager.
+
+Raises ``BootstrapError`` if no usable snapshot can be found or loaded.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,9 @@
-"""Graceful shutdown: drain in-flight queries and release resources."""
+"""Graceful shutdown sequence for the query node.
+
+Waits for in-flight queries to drain within a configurable timeout, then
+releases all generation resources (FAISS shards, SQLite pools, hotfix buffers).
+Ensures no queries are interrupted mid-flight during a rolling restart.
+"""
 
 from __future__ import annotations
 
