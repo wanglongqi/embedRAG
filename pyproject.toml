@@ -4,8 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "embedrag"
-version = "0.7.0"
+version = "0.7.1"
 description = "Production-grade read/write split RAG retrieval system"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
