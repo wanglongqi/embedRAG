@@ -4,10 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "embedrag"
-version = "0.7.1"
+version = "0.7.2"
 description = "Production-grade read/write split RAG retrieval system"
 readme = "README.md"
 requires-python = ">=3.11"
+authors = [
+    { name = "Longqi Wang", email = "iqgnol@gmail.com" }
+]
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -27,6 +30,11 @@ dependencies = [
     "croniter>=2.0",
     "python-multipart>=0.0.9",
 ]
+
+[project.urls]
+Homepage = "https://github.com/wanglongqi/embedRAG"
+Repository = "https://github.com/wanglongqi/embedRAG"
+"Bug Tracker" = "https://github.com/wanglongqi/embedRAG/issues"
 
 [project.optional-dependencies]
 dev = [
