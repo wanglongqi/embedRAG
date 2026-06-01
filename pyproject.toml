@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "embedrag"
-version = "0.7.2"
+version = "0.7.3"
 description = "Production-grade read/write split RAG retrieval system"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
-    { name = "Longqi Wang", email = "iqgnol@gmail.com" }
+    { name = "wanglongqi" }
 ]
 dependencies = [
     "fastapi>=0.115",
