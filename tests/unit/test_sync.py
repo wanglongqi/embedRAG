@@ -13,31 +13,35 @@ from embedrag.shared.checksum import compute_sha256
 def sample_manifest():
     return Manifest(
         snapshot_version="v_test",
-        index=IndexInfo(
-            dim=32,
-            shards=[
-                ShardEntry(
-                    file="index/shard_0.faiss",
-                    compressed_file="index/shard_0.faiss.zst",
-                    sha256_compressed="abc123",
-                    raw_size=1000,
-                    compressed_size=500,
-                    num_vectors=100,
-                ),
-            ],
-        ),
+        indexes={
+            "text": IndexInfo(
+                dim=32,
+                shards=[
+                    ShardEntry(
+                        file="index/shard_0.faiss",
+                        compressed_file="index/shard_0.faiss.zst",
+                        sha256_compressed="abc123",
+                        raw_size=1000,
+                        compressed_size=500,
+                        num_vectors=100,
+                    ),
+                ],
+            )
+        },
         db=FileEntry(
             file="db/embedrag.db",
             compressed_file="db/embedrag.db.zst",
             raw_size=2000,
             compressed_size=800,
         ),
-        id_map=FileEntry(
-            file="index/id_map.msgpack",
-            compressed_file="index/id_map.msgpack.zst",
-            raw_size=500,
-            compressed_size=200,
-        ),
+        id_maps={
+            "text": FileEntry(
+                file="index/id_map.msgpack",
+                compressed_file="index/id_map.msgpack.zst",
+                raw_size=500,
+                compressed_size=200,
+            )
+        },
         total_compressed_size=1500,
         total_raw_size=3500,
     )

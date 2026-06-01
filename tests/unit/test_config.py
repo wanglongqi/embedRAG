@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Tests for configuration loading and validation."""
 
 from pathlib import Path

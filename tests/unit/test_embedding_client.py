@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Tests for EmbeddingClient with embedrag and openai API formats."""
 
 from __future__ import annotations

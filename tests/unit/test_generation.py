@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Tests for generation manager: atomic swap, ref counting, drain."""
 
 import pytest

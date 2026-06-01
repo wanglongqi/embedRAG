@@ -93,6 +93,7 @@ class TestManifestSerialization:
         m = _sample_manifest()
         entry = m.get_file_entry_by_compressed("index/text/shard_0.faiss.zst")
         assert entry is not None
+        assert isinstance(entry, ShardEntry)
         assert entry.num_vectors == 5000
 
     def test_delta_info_serialization(self):
