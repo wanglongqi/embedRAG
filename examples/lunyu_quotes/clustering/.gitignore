@@ -1,0 +1,4 @@
+# Regenerable artifacts (rebuild with export_vectors.py + the CLI)
+quotes.jsonl
+quotes.npy
+results/
