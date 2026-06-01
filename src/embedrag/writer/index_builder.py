@@ -186,9 +186,9 @@ class IndexBuilder:
         dim = vectors.shape[1]
 
         if index_type == "Flat":
-            index = faiss.IndexFlatIP(dim)
-            index.add(vectors)
-            return index
+            index_flat = faiss.IndexFlatIP(dim)
+            index_flat.add(vectors)
+            return index_flat
 
         index = faiss.index_factory(dim, index_type, faiss.METRIC_INNER_PRODUCT)
 

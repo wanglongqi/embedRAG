@@ -72,10 +72,11 @@ class ShardWorker:
             d = self._index.d if hasattr(self._index, "d") else 0
             return np.empty((0, d), dtype=np.float32)
         # IVF indexes need a direct map to support reconstruction by id.
-        try:
-            self._index.make_direct_map()
-        except (AttributeError, RuntimeError):
-            pass
+        if hasattr(self._index, "make_direct_map"):
+            try:
+                getattr(self._index, "make_direct_map")()
+            except (AttributeError, RuntimeError):
+                pass
         vectors = self._index.reconstruct_n(0, n)
         return np.asarray(vectors, dtype=np.float32)
 

@@ -10,8 +10,6 @@ jobs:
   lint:
     name: Lint & Type Check
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v6
 
@@ -33,18 +31,7 @@ jobs:
           uv run ruff format --check .
 
       - name: Type check with mypy
-        run: |
-          uv run mypy src > mypy_error.log || true
-          cat mypy_error.log
-          git config --global user.name "CI Bot"
-          git config --global user.email "ci-bot@embedrag.local"
-          git add mypy_error.log
-          git commit -m "chore: add mypy error log from CI" || true
-          git push || true
-          # Force job to fail if there are errors in the log file
-          if grep -q "error:" mypy_error.log; then
-            exit 1
-          fi
+        run: uv run mypy src
 
   test:
     name: Test (Python ${{ matrix.python-version }})
