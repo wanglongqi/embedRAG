@@ -1,0 +1,3 @@
+src/embedrag/writer/index_builder.py:193: error: Incompatible types in assignment (expression has type "Index", variable has type "IndexFlatIP")  [assignment]
+src/embedrag/query/index/shard.py:76: error: "Index" has no attribute "make_direct_map"  [attr-defined]
+Found 2 errors in 2 files (checked 65 source files)
