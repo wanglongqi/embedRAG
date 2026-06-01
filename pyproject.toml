@@ -99,6 +99,8 @@ module = [
     "sklearn.*",
     "umap.*",
     "scipy.*",
+    "igraph.*",
+    "leidenalg.*",
 ]
 ignore_missing_imports = true
 
