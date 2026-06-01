@@ -122,3 +122,29 @@ class TestWriterConfig:
         cfg = load_config(path)
         assert isinstance(cfg, WriterNodeConfig)
         assert cfg.embedding.service_url == "http://localhost:1234/embed"
+
+
+class TestLLMConfig:
+    def test_defaults(self):
+        cfg = QueryNodeConfig()
+        assert cfg.llm.service_url == ""
+        assert cfg.llm.model == ""
+        assert cfg.llm.language == "auto"
+
+    def test_load_from_yaml(self, tmp_path):
+        data = {
+            "node": {"role": "query"},
+            "llm": {
+                "service_url": "http://127.0.0.1:1234/v1/chat/completions",
+                "model": "qwen/qwen3-vl-4b",
+                "api_key": "test-llm-key",
+                "language": "Chinese",
+            },
+        }
+        path = _write_yaml(tmp_path / "q_llm.yaml", data)
+        cfg = load_config(path)
+        assert isinstance(cfg, QueryNodeConfig)
+        assert cfg.llm.service_url == "http://127.0.0.1:1234/v1/chat/completions"
+        assert cfg.llm.model == "qwen/qwen3-vl-4b"
+        assert cfg.llm.api_key == "test-llm-key"
+        assert cfg.llm.language == "Chinese"

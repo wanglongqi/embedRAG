@@ -170,7 +170,14 @@ Response:
 | `POST` | `/search/text` | Text-only search (embedding computed internally) |
 | `POST` | `/search/multi` | Cross-space search with late fusion |
 | `POST` | `/api/debug/search` | Debug search with full pipeline breakdown |
+| `POST` | `/api/cluster` | Cluster the loaded corpus (or a filtered subset) and persist the run |
+| `GET` | `/api/clusters` | List persisted cluster runs |
+| `GET` | `/api/clusters/{run_id}` | Fetch a full cluster run (projection + members) |
+| `DELETE` | `/api/clusters/{run_id}` | Delete a persisted cluster run |
+| `GET` | `/api/clusters/{run_id}/members` | List members of a cluster |
+| `POST` | `/api/clusters/{run_id}/search` | Search using a cluster centroid as the query |
 | `GET` | `/ui/` | WebUI (search, debug, status dashboard) |
+| `GET` | `/cluster/` | Interactive cluster visualization UI |
 | `POST` | `/admin/hotfix/add` | Emergency add chunk |
 | `POST` | `/admin/hotfix/delete` | Emergency delete chunk |
 | `POST` | `/admin/sync` | Trigger manual snapshot sync (optionally from a URL) |
@@ -247,6 +254,49 @@ The query node ships with a built-in web interface at `http://query-node:8000/ui
 - **Search** -- text input with mode (hybrid/dense/sparse), top_k slider, filters, timing chips, and result cards with parent context expansion.
 - **Debug** -- same query input but shows the full pipeline breakdown: the exact FTS5 query string generated, dense/sparse/fused result tables with scores and ranks, a timing waterfall chart, and the active config snapshot.
 - **Status** -- health check, active version, vector/document counts, and embedding service connectivity probe.
+
+## Clustering & Topic Discovery
+
+Grouping a set of texts into themes after embedding them is a common task (clustering customer complaints, review comments, FAQs, etc.). EmbedRAG ships a standalone, reusable clustering module (`embedrag.cluster`) that doubles as a CLI and an integrated query-node feature.
+
+**A modular pipeline** — vectorize → optional dimensionality reduction (PCA/UMAP) → cluster → evaluate → explain → label → visualize — with pluggable backends (`hdbscan`, `kmeans`, `agglomerative`, `dbscan`, optional `leiden`). An evaluation harness (silhouette, Davies–Bouldin, Calinski–Harabasz, noise ratio) drives an automatic algorithm/parameter sweep when you don't pin them yourself.
+
+### Standalone CLI
+
+Works on any `.jsonl` / `.csv` / `.npy` input — embeddings optional. With no embedding service it falls back to a char-n-gram TF-IDF representation (so DBSCAN-style clustering works without any vectors of your own):
+
+```bash
+# Cluster a file of {id, text}; embeds via an OpenAI-compatible service
+embedrag cluster --input complaints.jsonl \
+  --embed-url http://localhost:1234/v1/embeddings --embed-model my-embed \
+  --reduce umap --algorithm hdbscan \
+  -o run.json --viz report.html
+
+# No embeddings available → local TF-IDF fallback
+embedrag cluster --input complaints.jsonl --algorithm hdbscan --reduce umap
+
+# Pull exact vectors straight from a writer DB (chunk_embeddings)
+embedrag cluster --db /data/embedrag-writer/db/writer.db --filter doc_type=complaint
+```
+
+Optional LLM labeling (`--llm-url …`) generates a natural-language name per cluster; otherwise distinctive c-TF-IDF keywords are used.
+
+### Library API
+
+```python
+from embedrag.cluster import cluster_items, cluster_vectors
+
+result = cluster_items(texts, algorithm="auto")          # text in, clusters out
+result = cluster_vectors(vectors, items, reduce="umap")  # bring your own vectors
+```
+
+### Integrated with the vector store
+
+The query node can cluster its own loaded corpus by reconstructing vectors from the FAISS index (exact for `Flat` / `IVF,Flat`, approximate for `IVF,PQ`) — no schema change, no re-embedding. Runs are persisted as **side files** under `<data_dir>/cluster_runs/<run_id>.json`, listed/served by the cluster API, and explorable in the interactive `/cluster/` web page (built on Plotly.js). Search can be scoped to a cluster by passing `cluster_run_id` + `cluster_id` to `/search` or `/search/text`.
+
+Install the optional extra for UMAP-based reduction: `uv pip install -e ".[cluster]"` (requires `numpy<2`).
+
+See the [论语 clustering walkthrough](examples/lunyu_quotes/clustering/README.md) for an end-to-end demo and [docs/clustering.md](docs/clustering.md) for the full guide.
 
 ## Multi-Modal RAG (Named Index Spaces)
 
@@ -377,6 +427,21 @@ src/embedrag/
 │   ├── index.html               # SPA shell with tab navigation
 │   ├── style.css                # Dark/light theme
 │   └── app.js                   # Client-side search, debug, status
+├── clusterui/
+│   ├── index.html               # Interactive cluster page (Plotly.js)
+│   ├── cluster.css              # Cluster UI theme
+│   └── cluster.js               # Run/load clusters, scatter + charts
+├── cluster/
+│   ├── source.py                # Load vectors from file/npy/writer DB/FAISS
+│   ├── preprocess.py            # L2-normalize, PCA/UMAP reduction
+│   ├── algorithms.py            # Pluggable backends (hdbscan/kmeans/…)
+│   ├── evaluate.py              # Metrics + automatic parameter sweep
+│   ├── explain.py               # c-TF-IDF keywords, medoids, cohesion
+│   ├── label.py                 # Keyword + optional LLM cluster labels
+│   ├── visualize.py             # Per-algorithm view specs
+│   ├── report.py                # Self-contained HTML report
+│   ├── store.py                 # Side-file run persistence
+│   └── pipeline.py              # Orchestration + library API
 └── query/
     ├── app.py                   # FastAPI app + lifespan + WebUI mount
     ├── routes.py                # /search, /search/text, /search/multi, /admin/*
@@ -463,11 +528,12 @@ For global multilingual deployments, use one of these embedding models:
 - **RRF fusion**: Combines dense (FAISS inner product) and sparse (FTS5 trigram) rankings without score calibration.
 - **Flexible chunking**: Four strategies (auto/structured/plain/paragraph) handle everything from hierarchical Markdown to flat FAQ text. Each document picks its own strategy at ingest time.
 - **Text-only search**: The `/search/text` endpoint embeds the query internally, so callers never need to manage embeddings themselves.
+- **Clustering as a side feature**: Cluster runs are stored as JSON side files (`cluster_runs/`) and vectors are reconstructed from the FAISS index, so topic discovery never touches the snapshot DB schema.
 - **Multilingual by default**: Character-aware chunking + FTS5 trigram index ensure CJK/Latin/Cyrillic/Arabic all work without configuration. Dense retrieval quality depends on the external embedding model.
 
 ## Testing
 
 ```bash
-uv run pytest tests/unit/ -v           # 123 unit tests
+uv run pytest tests/unit/ -v           # 152 unit tests
 uv run pytest tests/unit/ --cov=embedrag # with coverage
 ```

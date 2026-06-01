@@ -338,6 +338,8 @@ class SearchRequest(BaseModel):
     expand_context: bool = True
     context_depth: int = 1
     space: str = "text"
+    cluster_run_id: str | None = None
+    cluster_id: int | None = None
 
 
 class TextSearchRequest(BaseModel):
@@ -361,6 +363,8 @@ class TextSearchRequest(BaseModel):
     context_depth: int = 1
     mode: str = "hybrid"
     space: str = "text"
+    cluster_run_id: str | None = None
+    cluster_id: int | None = None
 
 
 class ChunkResult(BaseModel):
@@ -480,12 +484,90 @@ class ReadinessResponse(BaseModel):
         active_version (str, optional): The snapshot version currently being served.
         vector_count (int, optional): Total vectors available for search.
         doc_count (int, optional): Total documents available for search.
+        llm_url (str, optional): Default LLM URL if configured.
+        llm_model (str, optional): Default LLM model if configured.
     """
 
     ready: bool
     active_version: str = ""
     vector_count: int = 0
     doc_count: int = 0
+    llm_url: str = ""
+    llm_model: str = ""
+
+
+# ── Clustering models ──
+
+
+class ClusterRequest(BaseModel):
+    """Run clustering over the loaded corpus (or a filtered subset)."""
+
+    algorithm: str = "auto"  # auto|hdbscan|kmeans|agglomerative|dbscan|leiden
+    reduce: str = "auto"  # auto|none|pca|umap
+    auto: bool = True
+    space: str = "text"
+    filters: dict | None = None  # doc_type / doc_id
+    max_items: int = 20000
+    params: dict = Field(default_factory=dict)  # min_cluster_size / k / eps / ...
+    top_keywords: int = 10
+    top_representatives: int = 5
+    label_with_llm: bool = False
+    llm_url: str = ""
+    llm_model: str = ""
+    llm_key: str = ""
+    llm_language: str = "auto"
+    persist: bool = True
+
+
+class ClusterRunInfo(BaseModel):
+    cluster_id: int
+    label: str = ""
+    summary: str = ""
+    size: int
+    keywords: list[str] = Field(default_factory=list)
+    cohesion: float = 0.0
+    separation: float = 0.0
+    representatives: list[str] = Field(default_factory=list)
+    representative_texts: list[str] = Field(default_factory=list)
+
+
+class ClusterResponse(BaseModel):
+    run_id: str
+    algorithm: str
+    params: dict = Field(default_factory=dict)
+    space: str = "text"
+    n_items: int = 0
+    n_clusters: int = 0
+    noise_count: int = 0
+    clusters: list[ClusterRunInfo] = Field(default_factory=list)
+    metrics: dict = Field(default_factory=dict)
+    sweep: list[dict] = Field(default_factory=list)
+    projection: dict = Field(default_factory=dict)
+    viz: list[dict] = Field(default_factory=list)
+    elapsed_ms: float = 0
+
+
+class ClusterMemberInfo(BaseModel):
+    id: str
+    text: str
+    cluster_id: int
+    probability: float = 1.0
+    self_similarity: float = 0.0
+    runner_up_cluster: int = -1
+    runner_up_similarity: float = 0.0
+
+
+class ClusterMembersResponse(BaseModel):
+    run_id: str
+    cluster_id: int | None = None
+    total: int = 0
+    members: list[ClusterMemberInfo] = Field(default_factory=list)
+
+
+class ClusterCentroidSearchRequest(BaseModel):
+    cluster_id: int
+    top_k: int = 10
+    expand_context: bool = False
 
 
 # ── Multi-space search models ──

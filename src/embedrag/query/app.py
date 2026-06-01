@@ -252,4 +252,9 @@ def create_query_app(config_path: str | None = None) -> FastAPI:
     if webui_dir.exists():
         app.mount("/ui", StaticFiles(directory=str(webui_dir), html=True), name="webui")
 
+    # Mount the dedicated cluster visualization page (plotly-powered).
+    clusterui_dir = Path(__file__).parent.parent / "clusterui"
+    if clusterui_dir.exists():
+        app.mount("/cluster", StaticFiles(directory=str(clusterui_dir), html=True), name="clusterui")
+
     return app

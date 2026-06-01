@@ -16,6 +16,7 @@ dependencies = [
     "structlog>=24.1",
     "numpy>=1.26",
     "faiss-cpu>=1.8",
+    "scikit-learn>=1.4",
     "msgpack>=1.0",
     "zstandard>=0.22",
     "aiohttp>=3.9",
@@ -40,6 +41,12 @@ docs = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.25",
+]
+cluster = [
+    "umap-learn>=0.5.6",
+    "scipy>=1.11",
+    "igraph>=0.11.0",
+    "leidenalg>=0.10.0",
 ]
 
 [project.scripts]
@@ -88,6 +95,9 @@ module = [
     "botocore.*",
     "prometheus_client.*",
     "yaml.*",
+    "sklearn.*",
+    "umap.*",
+    "scipy.*",
 ]
 ignore_missing_imports = true
 
@@ -96,4 +106,8 @@ dev = [
     "mypy>=1.20.2",
     "pre-commit>=4.6.0",
     "ruff>=0.15.11",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "httpx>=0.27",
 ]

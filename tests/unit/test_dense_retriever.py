@@ -79,6 +79,25 @@ class TestShardManager:
         mgr.shutdown()
 
 
+class TestReconstruct:
+    def test_reconstruct_all_flat_exact(self, two_shard_setup):
+        dim, paths, map_path, n = two_shard_setup
+        workers = [ShardWorker(p, use_mmap=False) for p in paths]
+        mapper = IDMapper.load(map_path, [n, n])
+        mgr = ShardManager(workers, mapper)
+
+        chunk_ids, vectors = mgr.reconstruct_all()
+        assert len(chunk_ids) == n * 2
+        assert vectors.shape == (n * 2, dim)
+        # Flat indexes reconstruct exactly; vectors are unit-norm as stored.
+        norms = np.linalg.norm(vectors, axis=1)
+        assert np.allclose(norms, 1.0, atol=1e-4)
+        # ids resolve to the expected chunk id space
+        assert "chunk_0_0" in chunk_ids
+        assert "chunk_1_0" in chunk_ids
+        mgr.shutdown()
+
+
 class TestDenseRetriever:
     def test_with_deleted_ids(self, two_shard_setup):
         dim, paths, map_path, n = two_shard_setup

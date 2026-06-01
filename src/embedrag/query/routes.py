@@ -8,6 +8,7 @@ and snapshot version inspection. All handlers are registered on an
 
 from __future__ import annotations
 
+import asyncio
 import time
 
 import numpy as np
@@ -16,6 +17,12 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from embedrag.logging_setup import get_logger
 from embedrag.models.api import (
     ChunkResult,
+    ClusterCentroidSearchRequest,
+    ClusterMemberInfo,
+    ClusterMembersResponse,
+    ClusterRequest,
+    ClusterResponse,
+    ClusterRunInfo,
     DebugDenseHit,
     DebugFusedHit,
     DebugSearchRequest,
@@ -60,6 +67,22 @@ def _get_state(request: Request):
     return request.app.state.query
 
 
+def _cluster_member_filter(state, run_id: str | None, cluster_id: int | None) -> set[str] | None:
+    """Load the set of chunk ids belonging to a cluster of a persisted run.
+
+    Returns None when no cluster filter is requested.
+    """
+    if not run_id:
+        return None
+    from embedrag.cluster import store as cluster_store
+
+    result = cluster_store.load_run(state.config.node.data_dir, run_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"cluster run '{run_id}' not found")
+    member_ids = {m.id for m in result.members if cluster_id is None or m.cluster_id == cluster_id}
+    return member_ids
+
+
 @router.get("/health")
 async def health() -> HealthResponse:
     return HealthResponse(status="ok", node_type="query")
@@ -91,6 +114,8 @@ async def readiness(request: Request) -> ReadinessResponse:
         active_version=gen_mgr.active_version,
         vector_count=total_vectors,
         doc_count=ctx.manifest.db.doc_count if ctx else 0,
+        llm_url=state.config.llm.service_url if hasattr(state.config, "llm") else "",
+        llm_model=state.config.llm.model if hasattr(state.config, "llm") else "",
     )
 
 
@@ -104,13 +129,18 @@ async def _run_search_pipeline(
     context_depth: int,
     mode: str = "hybrid",
     space: str = "text",
+    cluster_filter: set[str] | None = None,
 ) -> tuple[list[ChunkResult], str, float, float, float, float]:
     """Shared search pipeline used by both /search and /search/text.
 
     Returns (chunks, score_type, dense_ms, sparse_ms, fusion_ms, pipeline_ms).
+    When ``cluster_filter`` is given, only chunks within that set are kept
+    (search within a cluster).
     """
     config = state.config
     top_k = min(top_k, config.search.max_top_k)
+    # Over-fetch when restricting to a cluster so enough survive the filter.
+    effective_top_k = top_k * 5 if cluster_filter else top_k
     t_pipe = time.monotonic()
 
     async with state.gen_manager.acquire() as ctx:
@@ -125,17 +155,17 @@ async def _run_search_pipeline(
         if mode != "sparse":
             dense_retriever = DenseRetriever(shard_mgr)
             deleted = hotfix._deleted_ids if hotfix else set()
-            dense_results, dense_ms = dense_retriever.search(query_vec, top_k * 2, deleted)
+            dense_results, dense_ms = dense_retriever.search(query_vec, effective_top_k * 2, deleted)
 
             if hotfix and hotfix.size > 0:
-                hotfix_results = hotfix.search(query_vec, top_k)
+                hotfix_results = hotfix.search(query_vec, effective_top_k)
                 for cid, score in hotfix_results:
                     dense_results.append(DenseResult(chunk_id=cid, score=score))
                 dense_results.sort(key=lambda r: r.score, reverse=True)
 
         if mode != "dense" and config.search.enable_sparse and query_text:
             sparse_retriever = SparseRetriever(ctx.db_pool)
-            sparse_results, sparse_ms = sparse_retriever.search(query_text, top_k * 2, filters)
+            sparse_results, sparse_ms = sparse_retriever.search(query_text, effective_top_k * 2, filters)
 
         # Fusion
         t_fusion = time.monotonic()
@@ -143,7 +173,7 @@ async def _run_search_pipeline(
             fused = rrf_fuse(
                 dense_results,
                 sparse_results,
-                top_k,
+                effective_top_k,
                 dense_weight=config.search.dense_weight,
                 sparse_weight=config.search.sparse_weight,
             )
@@ -151,18 +181,23 @@ async def _run_search_pipeline(
             score_map = {f.chunk_id: f.rrf_score for f in fused}
             score_type = "rrf"
         elif dense_results:
-            chunk_ids = [r.chunk_id for r in dense_results[:top_k]]
-            score_map = {r.chunk_id: r.score for r in dense_results[:top_k]}
+            chunk_ids = [r.chunk_id for r in dense_results[:effective_top_k]]
+            score_map = {r.chunk_id: r.score for r in dense_results[:effective_top_k]}
             score_type = "cosine"
         elif sparse_results:
-            chunk_ids = [r.chunk_id for r in sparse_results[:top_k]]
-            score_map = {r.chunk_id: r.score for r in sparse_results[:top_k]}
+            chunk_ids = [r.chunk_id for r in sparse_results[:effective_top_k]]
+            score_map = {r.chunk_id: r.score for r in sparse_results[:effective_top_k]}
             score_type = "bm25"
         else:
             chunk_ids = []
             score_map = {}
             score_type = "rrf"
         fusion_ms = (time.monotonic() - t_fusion) * 1000
+
+        if cluster_filter is not None:
+            chunk_ids = [cid for cid in chunk_ids if cid in cluster_filter][:top_k]
+        else:
+            chunk_ids = chunk_ids[:top_k]
 
         chunks: list[ChunkResult] = []
         for cid in chunk_ids:
@@ -191,6 +226,7 @@ async def search(request: Request, body: SearchRequest) -> SearchResponse:
     t_total = time.monotonic()
     try:
         query_vec = np.array(body.query_embedding, dtype=np.float32)
+        cluster_filter = _cluster_member_filter(state, body.cluster_run_id, body.cluster_id)
         chunks, score_type, dense_ms, sparse_ms, fusion_ms, _ = await _run_search_pipeline(
             state,
             query_vec,
@@ -200,6 +236,7 @@ async def search(request: Request, body: SearchRequest) -> SearchResponse:
             body.expand_context,
             body.context_depth,
             space=body.space,
+            cluster_filter=cluster_filter,
         )
 
         total_ms = (time.monotonic() - t_total) * 1000
@@ -243,6 +280,7 @@ async def search_text(request: Request, body: TextSearchRequest) -> SearchRespon
             query_vec = vectors[0]
             embed_ms = (time.monotonic() - t_emb) * 1000
 
+        cluster_filter = _cluster_member_filter(state, body.cluster_run_id, body.cluster_id)
         chunks, score_type, dense_ms, sparse_ms, fusion_ms, _ = await _run_search_pipeline(
             state,
             query_vec,
@@ -253,6 +291,7 @@ async def search_text(request: Request, body: TextSearchRequest) -> SearchRespon
             body.context_depth,
             mode=body.mode,
             space=body.space,
+            cluster_filter=cluster_filter,
         )
 
         total_ms = (time.monotonic() - t_total) * 1000
@@ -1007,3 +1046,253 @@ async def rerank_proxy(req: RerankRequest) -> RerankResponse:
 
     elapsed = (time.monotonic() - t0) * 1000
     return RerankResponse(results=results, elapsed_ms=elapsed)
+
+
+# ── Clustering ──
+
+
+def _filtered_chunk_ids(ctx, filters: dict) -> set[str]:
+    """Return chunk ids matching doc_type/doc_id filters."""
+    where: list[str] = []
+    params: list = []
+    if filters.get("doc_type"):
+        where.append("d.doc_type = ?")
+        params.append(filters["doc_type"])
+    if filters.get("doc_id"):
+        where.append("c.doc_id = ?")
+        params.append(filters["doc_id"])
+    sql = "SELECT c.chunk_id AS chunk_id FROM chunks c LEFT JOIN documents d ON c.doc_id = d.doc_id"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    with ctx.db_pool.connection() as conn:
+        return {r["chunk_id"] for r in conn.execute(sql, params).fetchall()}
+
+
+def _fetch_texts(ctx, chunk_ids: list[str]) -> dict[str, str]:
+    """Batch-fetch chunk texts keyed by chunk id."""
+    text_map: dict[str, str] = {}
+    with ctx.db_pool.connection() as conn:
+        for i in range(0, len(chunk_ids), 900):
+            batch = chunk_ids[i : i + 900]
+            placeholders = ",".join("?" * len(batch))
+            rows = conn.execute(
+                f"SELECT chunk_id, text FROM chunks WHERE chunk_id IN ({placeholders})", batch
+            ).fetchall()
+            for r in rows:
+                text_map[r["chunk_id"]] = r["text"] or ""
+    return text_map
+
+
+def _source_generation_vectors(ctx, space: str, filters: dict | None, max_items: int):
+    """Reconstruct exact-ish vectors + texts from the active generation."""
+    from embedrag.cluster.types import Item
+
+    chunk_ids, vectors = ctx.get_shard_manager(space).reconstruct_all()
+    if vectors.shape[0] == 0:
+        return [], vectors
+
+    if filters:
+        allowed = _filtered_chunk_ids(ctx, filters)
+        keep = [i for i, c in enumerate(chunk_ids) if c in allowed]
+        chunk_ids = [chunk_ids[i] for i in keep]
+        vectors = vectors[keep]
+
+    if max_items and len(chunk_ids) > max_items:
+        rng = np.random.RandomState(42)
+        sel = np.sort(rng.choice(len(chunk_ids), max_items, replace=False))
+        chunk_ids = [chunk_ids[i] for i in sel]
+        vectors = vectors[sel]
+
+    text_map = _fetch_texts(ctx, chunk_ids)
+    items = [Item(id=c, text=text_map.get(c, "")) for c in chunk_ids]
+    return items, vectors
+
+
+def _to_cluster_response(result, elapsed_ms: float = 0.0) -> ClusterResponse:
+    return ClusterResponse(
+        run_id=result.run_id,
+        algorithm=result.algorithm,
+        params=result.params,
+        space=result.space,
+        n_items=result.n_items,
+        n_clusters=result.n_clusters,
+        noise_count=result.noise_count,
+        clusters=[
+            ClusterRunInfo(
+                cluster_id=c.cluster_id,
+                label=c.label,
+                summary=c.summary,
+                size=c.size,
+                keywords=c.keywords,
+                cohesion=c.cohesion,
+                separation=c.separation,
+                representatives=c.representatives,
+                representative_texts=c.representative_texts,
+            )
+            for c in result.clusters
+        ],
+        metrics=result.metrics,
+        sweep=result.sweep,
+        projection=result.projection,
+        viz=result.viz,
+        elapsed_ms=round(elapsed_ms, 2),
+    )
+
+
+@router.post("/api/cluster")
+async def run_cluster(request: Request, body: ClusterRequest) -> ClusterResponse:
+    """Cluster the loaded corpus (or a filtered subset) and persist the run."""
+    state = _get_state(request)
+    from embedrag.cluster import store as cluster_store
+    from embedrag.cluster.pipeline import apply_llm_labels, cluster_vectors
+
+    t0 = time.monotonic()
+    async with state.gen_manager.acquire() as ctx:
+        try:
+            ctx.get_shard_manager(body.space)
+        except KeyError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        items, vectors = await asyncio.to_thread(
+            _source_generation_vectors, ctx, body.space, body.filters, body.max_items
+        )
+        if len(items) == 0:
+            raise HTTPException(status_code=400, detail="No vectors available to cluster for this space/filters")
+        result = await asyncio.to_thread(
+            cluster_vectors,
+            vectors,
+            items,
+            algorithm=body.algorithm,
+            reduce=body.reduce,
+            auto=body.auto,
+            params=dict(body.params),
+            top_keywords=body.top_keywords,
+            top_reps=body.top_representatives,
+            space=body.space,
+            source=f"generation:{ctx.version}",
+        )
+
+    label_with_llm = body.label_with_llm
+    llm_url = body.llm_url or (state.config.llm.service_url if hasattr(state.config, "llm") else "")
+    llm_model = body.llm_model or (state.config.llm.model if hasattr(state.config, "llm") else "")
+    llm_key = body.llm_key or (state.config.llm.api_key_resolved if hasattr(state.config, "llm") else "")
+    llm_language = body.llm_language or (state.config.llm.language if hasattr(state.config, "llm") else "auto")
+
+    if label_with_llm and llm_url:
+        try:
+            await apply_llm_labels(result, chat_url=llm_url, model=llm_model, api_key=llm_key, language=llm_language)
+        except Exception as exc:
+            logger.warning("cluster_llm_label_failed", error=str(exc))
+
+    if body.persist:
+        await asyncio.to_thread(cluster_store.save_run, state.config.node.data_dir, result)
+
+    return _to_cluster_response(result, (time.monotonic() - t0) * 1000)
+
+
+@router.get("/api/clusters")
+async def list_cluster_runs(request: Request) -> dict:
+    """List persisted cluster runs (summaries)."""
+    state = _get_state(request)
+    from embedrag.cluster import store as cluster_store
+
+    runs = await asyncio.to_thread(cluster_store.list_runs, state.config.node.data_dir)
+    return {"runs": runs, "total": len(runs)}
+
+
+@router.get("/api/clusters/{run_id}")
+async def get_cluster_run(request: Request, run_id: str) -> ClusterResponse:
+    """Return a full persisted cluster run (without member rows)."""
+    state = _get_state(request)
+    from embedrag.cluster import store as cluster_store
+
+    result = await asyncio.to_thread(cluster_store.load_run, state.config.node.data_dir, run_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"cluster run '{run_id}' not found")
+    return _to_cluster_response(result)
+
+
+@router.delete("/api/clusters/{run_id}")
+async def delete_cluster_run(request: Request, run_id: str) -> dict:
+    """Delete a persisted cluster run."""
+    state = _get_state(request)
+    from embedrag.cluster import store as cluster_store
+
+    deleted = await asyncio.to_thread(cluster_store.delete_run, state.config.node.data_dir, run_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"cluster run '{run_id}' not found")
+    return {"status": "deleted", "run_id": run_id}
+
+
+@router.get("/api/clusters/{run_id}/members")
+async def get_cluster_members(
+    request: Request, run_id: str, cluster_id: int | None = None, limit: int = 200, offset: int = 0
+) -> ClusterMembersResponse:
+    """Page the members of a run (optionally a single cluster)."""
+    state = _get_state(request)
+    from embedrag.cluster import store as cluster_store
+
+    result = await asyncio.to_thread(cluster_store.load_run, state.config.node.data_dir, run_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"cluster run '{run_id}' not found")
+    members = [m for m in result.members if cluster_id is None or m.cluster_id == cluster_id]
+    total = len(members)
+    page = members[offset : offset + limit]
+    return ClusterMembersResponse(
+        run_id=run_id,
+        cluster_id=cluster_id,
+        total=total,
+        members=[
+            ClusterMemberInfo(
+                id=m.id,
+                text=m.text,
+                cluster_id=m.cluster_id,
+                probability=m.probability,
+                self_similarity=m.self_similarity,
+                runner_up_cluster=m.runner_up_cluster,
+                runner_up_similarity=m.runner_up_similarity,
+            )
+            for m in page
+        ],
+    )
+
+
+@router.post("/api/clusters/{run_id}/search")
+async def search_by_cluster_centroid(
+    request: Request, run_id: str, body: ClusterCentroidSearchRequest
+) -> SearchResponse:
+    """Use a cluster's centroid as a query vector against the index.
+
+    Turns a cluster into a reusable retrieval handle (finds items near the
+    cluster, including ones not in the original run).
+    """
+    state = _get_state(request)
+    from embedrag.cluster import store as cluster_store
+
+    result = await asyncio.to_thread(cluster_store.load_run, state.config.node.data_dir, run_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"cluster run '{run_id}' not found")
+    centroid = next((c.centroid for c in result.clusters if c.cluster_id == body.cluster_id), None)
+    if not centroid:
+        raise HTTPException(status_code=404, detail=f"cluster {body.cluster_id} not found in run '{run_id}'")
+
+    t_total = time.monotonic()
+    query_vec = np.array(centroid, dtype=np.float32)
+    chunks, score_type, dense_ms, sparse_ms, fusion_ms, _ = await _run_search_pipeline(
+        state,
+        query_vec,
+        None,
+        body.top_k,
+        None,
+        body.expand_context,
+        1,
+        mode="dense",
+        space=result.space,
+    )
+    total_ms = (time.monotonic() - t_total) * 1000
+    return SearchResponse(
+        chunks=chunks,
+        total=len(chunks),
+        score_type=score_type,
+        dense_time_ms=round(dense_ms, 2),
+        total_time_ms=round(total_ms, 2),
+    )

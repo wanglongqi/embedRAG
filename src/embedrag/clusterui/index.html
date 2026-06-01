@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmbedRAG · Cluster</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="cluster.css?v=20260601_2">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <h1>EmbedRAG · Cluster</h1>
+      <span class="badge" id="versionBadge">--</span>
+    </div>
+    <nav>
+      <a class="tab" href="/ui/">Search</a>
+      <span class="tab active">Cluster</span>
+    </nav>
+  </header>
+
+  <main>
+    <section class="controls">
+      <div class="control-grid">
+        <label>Algorithm
+          <select id="algorithm">
+            <option value="auto">auto</option>
+            <option value="hdbscan">hdbscan</option>
+            <option value="kmeans">kmeans</option>
+            <option value="agglomerative">agglomerative</option>
+            <option value="dbscan">dbscan</option>
+            <option value="leiden">leiden</option>
+          </select>
+        </label>
+        <label>Reduce
+          <select id="reduce">
+            <option value="auto">auto</option>
+            <option value="none">none</option>
+            <option value="pca">pca</option>
+            <option value="umap">umap</option>
+          </select>
+        </label>
+        <label>Space <input type="text" id="space" value="text"></label>
+        <label>doc_type <input type="text" id="docType" placeholder="(all)"></label>
+        <label>doc_id <input type="text" id="docId" placeholder="(all)"></label>
+        <label>Max items <input type="number" id="maxItems" value="20000"></label>
+        <label id="ctrl_min_cluster_size" title="HDBSCAN minimum cluster size">min_cluster_size <input type="number" id="minClusterSize" placeholder="auto"></label>
+        <label id="ctrl_k" title="KMeans / Agglomerative cluster count (k)">k <input type="number" id="kParam" placeholder="auto"></label>
+        <label id="ctrl_eps" title="DBSCAN eps (neighborhood radius)">eps <input type="number" step="any" id="epsParam" placeholder="auto"></label>
+        <label id="ctrl_min_samples" title="HDBSCAN / DBSCAN min_samples (core point density threshold)">min_samples <input type="number" id="minSamples" placeholder="auto"></label>
+        <label id="ctrl_selection_method" title="HDBSCAN cluster selection method (Excess of Mass or Leaf)">selection_method
+          <select id="selectionMethod">
+            <option value="">(default)</option>
+            <option value="eom">eom</option>
+            <option value="leaf">leaf</option>
+          </select>
+        </label>
+        <label id="ctrl_linkage" title="Agglomerative linkage type (ward, complete, average, single)">linkage
+          <select id="linkage">
+            <option value="">(default)</option>
+            <option value="ward">ward</option>
+            <option value="complete">complete</option>
+            <option value="average">average</option>
+            <option value="single">single</option>
+          </select>
+        </label>
+        <label id="ctrl_distance_threshold" title="Agglomerative linkage distance merge threshold">dist_threshold <input type="number" step="any" id="distanceThreshold" placeholder="none"></label>
+        <label id="ctrl_resolution" title="Leiden resolution parameter (higher = more smaller clusters)">resolution <input type="number" step="any" id="leidenResolution" placeholder="1.0"></label>
+        <label id="ctrl_knn" title="Leiden k-nearest neighbors graph building parameter">knn <input type="number" id="leidenKnn" placeholder="15"></label>
+        <label class="check"><input type="checkbox" id="autoParam" checked> auto param sweep</label>
+      </div>
+      <details class="llm-panel">
+        <summary>LLM labeling (optional)</summary>
+        <div class="control-grid">
+          <label class="check"><input type="checkbox" id="useLlm"> label with LLM</label>
+          <label>Chat URL <input type="text" id="llmUrl" placeholder="http://127.0.0.1:1234/v1/chat/completions"></label>
+          <label>Model <input type="text" id="llmModel" placeholder="model name"></label>
+          <label>Language <input type="text" id="llmLang" value="auto"></label>
+        </div>
+      </details>
+      <div class="actions">
+        <button class="btn-primary" id="runBtn">Run clustering</button>
+        <select id="runPicker" title="Load a saved run"><option value="">Saved runs…</option></select>
+        <button id="loadRunBtn">Load</button>
+        <span class="status" id="status"></span>
+      </div>
+    </section>
+
+    <section class="summary" id="summary" style="display:none"></section>
+
+    <section class="charts" id="charts" style="display:none">
+      <div class="panel full"><h2>2D projection <span class="hint" id="scatterHint"></span></h2><div id="scatter"></div></div>
+      <div class="bottom-row">
+        <div class="panel resizable-panel" id="sizesPanel"><h2>Cluster sizes</h2><div id="sizes"></div></div>
+        <div class="panel flexible-panel" id="auxPanel"><h2 id="auxTitle">Detail</h2><div id="aux"></div></div>
+      </div>
+    </section>
+
+    <section class="tablewrap" id="tablewrap" style="display:none">
+      <div class="panel full">
+        <h2>Clusters <span class="hint">click a row to inspect members</span></h2>
+        <div id="clusterTable"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="drawer" id="drawer">
+    <div class="drawer-head">
+      <h3 id="drawerTitle">Members</h3>
+      <button id="drawerClose">×</button>
+    </div>
+    <div class="drawer-actions">
+      <button id="centroidSearchBtn" title="Use this cluster's centroid as a query against the whole index">Search by centroid</button>
+    </div>
+    <div id="drawerBody"></div>
+  </div>
+
+  <footer><span>EmbedRAG Cluster View</span></footer>
+  <script src="cluster.js?v=20260601_2"></script>
+</body>
+</html>

@@ -63,6 +63,13 @@ embedding:
 #   timeout_seconds: 30
 #   retry_count: 3
 
+llm:
+  service_url: ""            # OpenAI-compatible chat endpoint (e.g. "http://localhost:1234/v1/chat/completions")
+  model: ""                  # Model name (e.g. "qwen/qwen3-vl-4b" or "gpt-4o")
+  api_key: ""                # Bearer token literal (or use OPENAI_API_KEY env var)
+  language: auto             # Target language for cluster labels ("auto" or e.g. "Chinese")
+  timeout_seconds: 60        # Timeout for chat API calls
+
 server:
   host: 0.0.0.0
   port: 8000

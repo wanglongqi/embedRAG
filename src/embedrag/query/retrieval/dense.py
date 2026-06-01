@@ -106,6 +106,26 @@ class ShardManager:
                 results.append(DenseResult(chunk_id=chunk_id, score=float(dist)))
         return results
 
+    def reconstruct_all(self) -> tuple[list[str], np.ndarray]:
+        """Reconstruct every stored vector with its chunk id.
+
+        Returns ``(chunk_ids, vectors)``. Exact for Flat/IVF-Flat shards,
+        approximate for IVF,PQ. Vectors whose ids cannot be resolved are
+        skipped.
+        """
+        all_ids: list[str] = []
+        chunks: list[np.ndarray] = []
+        for shard_idx, worker in enumerate(self._workers):
+            vecs = worker.reconstruct_all()
+            for local_idx in range(vecs.shape[0]):
+                chunk_id = self._id_mapper.resolve_single(shard_idx, local_idx)
+                if chunk_id:
+                    all_ids.append(chunk_id)
+                    chunks.append(vecs[local_idx])
+        if not chunks:
+            return [], np.empty((0, 0), dtype=np.float32)
+        return all_ids, np.stack(chunks).astype(np.float32)
+
     def shutdown(self) -> None:
         """Shut down the thread pool and release all worker resources."""
         self._executor.shutdown(wait=False)

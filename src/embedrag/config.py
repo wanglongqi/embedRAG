@@ -369,6 +369,33 @@ class IndexBuildConfig(BaseModel):
     compression_level: int = 3
 
 
+class LLMConfig(BaseModel):
+    """Configuration for LLM integration (e.g., cluster labeling, summary generation).
+
+    Attributes:
+        service_url (str): The endpoint of the external LLM chat service.
+        api_key (str): Optional API key for the service.
+        api_key_env (str): Name of environment variable containing API key.
+        model (str): The model identifier to send in the request.
+        language (str): The target language for generation (e.g. "auto", "Chinese").
+        timeout_seconds (int): Request timeout in seconds.
+    """
+
+    service_url: str = ""
+    api_key: str = ""
+    api_key_env: str = "OPENAI_API_KEY"
+    model: str = ""
+    language: str = "auto"
+    timeout_seconds: int = 60
+
+    @property
+    def api_key_resolved(self) -> str:
+        """str: The resolved API key from env or direct config."""
+        if self.api_key:
+            return self.api_key
+        return _resolve_env(self.api_key_env)
+
+
 # ── Top-level configs ──
 
 
@@ -384,6 +411,7 @@ class QueryNodeConfig(BaseModel):
         search (SearchConfig): Retrieval and fusion settings.
         hotfix (HotfixConfig): Real-time update buffer.
         embedding (EmbeddingConfig): Embedding service settings.
+        llm (LLMConfig): Default LLM configuration for cluster labeling/chat.
         server (ServerConfig): FastAPI server settings.
         logging (LoggingConfig): Logging settings.
         metrics (MetricsConfig): Monitoring settings.
@@ -397,6 +425,7 @@ class QueryNodeConfig(BaseModel):
     search: SearchConfig = Field(default_factory=SearchConfig)
     hotfix: HotfixConfig = Field(default_factory=HotfixConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
+    llm: LLMConfig = Field(default_factory=LLMConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
@@ -410,6 +439,7 @@ class WriterNodeConfig(BaseModel):
         object_store (ObjectStoreConfig): Snapshot upload settings.
         db (DBConfig): Metadata database settings.
         embedding (EmbeddingConfig): Embedding service settings.
+        llm (LLMConfig): Default LLM configuration for cluster labeling/chat.
         index_build (IndexBuildConfig): FAISS build parameters.
         server (ServerConfig): FastAPI server settings (defaults to port 8001).
         logging (LoggingConfig): Logging settings.
@@ -420,6 +450,7 @@ class WriterNodeConfig(BaseModel):
     object_store: ObjectStoreConfig = Field(default_factory=ObjectStoreConfig)
     db: DBConfig = Field(default_factory=DBConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
+    llm: LLMConfig = Field(default_factory=LLMConfig)
     index_build: IndexBuildConfig = Field(default_factory=IndexBuildConfig)
     server: ServerConfig = Field(default_factory=lambda: ServerConfig(port=8001))
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

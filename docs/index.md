@@ -11,6 +11,7 @@ Most RAG systems struggle with scaling ingestion and search simultaneously. Embe
 - **Production Ready**: Built-in snapshot management, zero-downtime synchronization, and structured logging.
 - **Flexible Search**: Hybrid search (dense + sparse) with Reciprocal Rank Fusion (RRF) and hierarchical expansion.
 - **Multi-Modal**: Support for heterogeneous embedding spaces (text, images, audio).
+- **Clustering**: Standalone + integrated topic discovery over embeddings, with auto parameter tuning and an interactive visualization.
 
 ## Architecture
 
@@ -43,6 +44,7 @@ Dive into the details of EmbedRAG:
 - [**Quick Start**](#quick-start): Get a local cluster running in minutes.
 - [**Configuration Guide**](configuration.md): Detailed reference for all YAML settings.
 - [**Embedding Setup**](embedding.md): How to connect your favorite embedding models (OpenAI, HuggingFace, etc.).
+- [**Clustering**](clustering.md): Group embeddings into themes via the CLI, the library, or the integrated query node.
 - [**Multi-Modal RAG**](multi-modal.md): Building RAG systems for more than just text.
 - [**Operational Runbook**](operations.md): Deploying, monitoring, and scaling EmbedRAG in production.
 - [**Integration Guide**](integration.md): Client libraries and API integration patterns.

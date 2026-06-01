@@ -77,3 +77,32 @@ SQLite FTS5-based keyword search implementation.
 ### Fusion
 Reciprocal Rank Fusion (RRF) for combining dense and sparse results.
 ::: embedrag.query.retrieval.fusion
+
+## Clustering
+
+The standalone, reusable clustering module that powers the `embedrag cluster`
+CLI and the integrated query-node cluster API.
+
+### Pipeline & Library API
+Orchestration and the public `cluster_vectors` / `cluster_items` entry points.
+::: embedrag.cluster.pipeline
+
+### Sources
+Loading vectors and items from files, `.npy`, a writer DB, or TF-IDF.
+::: embedrag.cluster.source
+
+### Algorithms
+Pluggable clustering backends behind a single interface.
+::: embedrag.cluster.algorithms
+
+### Evaluation
+Internal/external metrics and the automatic parameter sweep.
+::: embedrag.cluster.evaluate
+
+### Explainability
+c-TF-IDF keywords, medoids, cohesion/separation, and attribution.
+::: embedrag.cluster.explain
+
+### Persistence
+Side-file storage for cluster runs.
+::: embedrag.cluster.store

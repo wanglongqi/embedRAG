@@ -263,6 +263,20 @@ hotfix:
 
 The hotfix buffer is an in-memory FAISS `IndexFlatIP` on the query node. Writes are merged into search results and cleared when the next snapshot loads.
 
+### llm
+
+```yaml
+llm:
+  service_url: "http://localhost:1234/v1/chat/completions" # OpenAI-compatible chat endpoint
+  model: "qwen/qwen3-vl-4b"                                 # Model identifier
+  api_key: ""                                              # Optional API key
+  api_key_env: "OPENAI_API_KEY"                            # Optional env var name for API key
+  language: "auto"                                         # Target language ("auto" or specific language name)
+  timeout_seconds: 60                                      # Timeout for individual chat requests
+```
+
+Configures an external OpenAI-compatible chat service to perform tasks like cluster labeling and summary generation. When set, these server-level configurations serve as the default settings for the clustering web UI and backend APIs.
+
 ## Full Examples
 
 See `config/writer_node.yaml.example` and `config/query_node.yaml.example` for complete annotated examples.

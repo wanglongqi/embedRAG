@@ -61,6 +61,24 @@ class ShardWorker:
         distances, indices = self._index.search(query_vectors, k)
         return distances, indices
 
+    def reconstruct_all(self) -> np.ndarray:
+        """Reconstruct all stored vectors from this shard.
+
+        Exact for Flat / IVF,Flat indexes; approximate for product-quantized
+        (IVF,PQ) indexes. Returns a ``(ntotal, dim)`` float32 array.
+        """
+        n = self._index.ntotal
+        if n == 0:
+            d = self._index.d if hasattr(self._index, "d") else 0
+            return np.empty((0, d), dtype=np.float32)
+        # IVF indexes need a direct map to support reconstruction by id.
+        try:
+            self._index.make_direct_map()
+        except (AttributeError, RuntimeError):
+            pass
+        vectors = self._index.reconstruct_n(0, n)
+        return np.asarray(vectors, dtype=np.float32)
+
     def shutdown(self) -> None:
         """Release the loaded FAISS index and free resources."""
         del self._index

@@ -27,6 +27,11 @@ hotfix:
   enabled: true
   max_vectors: 1000
 
+llm:
+  service_url: http://127.0.0.1:1234/v1/chat/completions
+  model: qwen/qwen3-vl-4b
+  language: Chinese
+
 server:
   host: 0.0.0.0
   port: 8000

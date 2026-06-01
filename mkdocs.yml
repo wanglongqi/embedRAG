@@ -1,7 +1,7 @@
 site_name: EmbedRAG
 site_description: Production-grade Retrieval-Augmented Generation system with read/write split architecture.
 site_author: EmbedRAG Team
-repo_url: https://github.com/your-username/embedRAG
+repo_url: https://github.com/wanglongqi/embedRAG
 repo_name: embedRAG
 edit_uri: edit/main/docs/
 
@@ -60,6 +60,8 @@ nav:
   - Home: index.md
   - Configuration: configuration.md
   - Embedding: embedding.md
+  - Clustering: clustering.md
+  - Cluster Design: design-clustering.md
   - Multi-Modal: multi-modal.md
   - Operations: operations.md
   - Integration: integration.md

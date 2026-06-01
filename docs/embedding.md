@@ -31,9 +31,11 @@ graph TB
 
 The code already provides all the hooks:
 
-- [config.SyncConfig](../src/embedrag/config.py) — `enabled` / `source` / `http_url` / `cron` / `poll_interval_seconds`
-- [bootstrap_query_node](../src/embedrag/query/lifecycle/bootstrap.py) — reuses local `active/` if present, otherwise downloads from remote
-- [SnapshotSyncer](../src/embedrag/query/sync/syncer.py) — cron or fixed-interval polling, hot-swap via `GenerationManager`
+- `config.SyncConfig` — `enabled` / `source` / `http_url` / `cron` / `poll_interval_seconds`
+
+- `bootstrap_query_node` — reuses local `active/` if present, otherwise downloads from remote
+
+- `SnapshotSyncer` — cron or fixed-interval polling, hot-swap via `GenerationManager`
 - `GET /readiness` — returns 503 until a snapshot is loaded; perfect for host preflight
 - `POST /admin/sync` — manual sync trigger; also accepts `{"snapshot_dir": "/local/path"}` for loading a specific version
 - `create_query_app(config_path)` — FastAPI factory for in-process embedding
@@ -216,7 +218,7 @@ honcho start             # Ctrl-C stops both processes
 
 A1 and A2 both assume the node can pull a snapshot on first start. A3 removes that assumption: the snapshot ships **inside** the deploy artifact, so the process is Ready the moment it starts — no network, no object store, no sidecar prefetch.
 
-This works because [bootstrap_query_node](../src/embedrag/query/lifecycle/bootstrap.py) always looks at `data_dir/active/*/manifest.json` *before* it considers any remote source. If a verified snapshot is already on disk, the node mmaps it and returns. The object-store and HTTP code paths are only reached when `active/` is empty.
+This works because `bootstrap_query_node` always looks at `data_dir/active/*/manifest.json` *before* it considers any remote source. If a verified snapshot is already on disk, the node mmaps it and returns. The object-store and HTTP code paths are only reached when `active/` is empty.
 
 ```mermaid
 graph LR
@@ -330,7 +332,7 @@ curl -X POST http://127.0.0.1:8800/admin/sync \
     -d '{"snapshot_dir":"/opt/myservice-rag/current/data/hotfix/v1780000000"}'
 ```
 
-The `snapshot_dir` branch in [src/embedrag/query/routes.py](../src/embedrag/query/routes.py) (`trigger_sync`) verifies the manifest, calls `load_generation`, and `GenerationManager.swap()` — same hot-swap machinery the background syncer uses. The next scheduled tarball deploy re-establishes the canonical state.
+The `snapshot_dir` branch in `src/embedrag/query/routes.py` (`trigger_sync`) verifies the manifest, calls `load_generation`, and `GenerationManager.swap()` — same hot-swap machinery the background syncer uses. The next scheduled tarball deploy re-establishes the canonical state.
 
 ### Readiness and deploy automation
 
@@ -350,7 +352,7 @@ Measured from the examples bundled in this repo (compressed snapshots as they ap
 - Lunyu quotes — ~6 MB — tarball overhead negligible, strongly recommended.
 - Causal Inference — ~28 MB — still trivial; A3 is the obvious pick.
 - Hongloumeng — ~62 MB — fine for A3; watch artifact retention policy.
-- Quantangshi — ~406 MB — A3 becomes painful (slow transfer, storage blow-up across many releases). Prefer [B4 initContainer prefetch](#b4-sidecar--initcontainer-prefetch-zero-wait-rolling-upgrades) or keep the snapshot on a CDN / shared volume and ship only code + config.
+- Quantangshi — ~406 MB — A3 becomes painful (slow transfer, storage blow-up across many releases). Prefer [B4 initContainer prefetch](#b4-sidecar-initcontainer-prefetch-zero-wait-rolling-upgrades) or keep the snapshot on a CDN / shared volume and ship only code + config.
 
 As a rough rule: ship the snapshot in the tarball while it stays `<=` ~200 MB compressed; above that, decouple the two artifacts.
 
